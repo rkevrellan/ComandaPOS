@@ -1,0 +1,30 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "ComandaPOS (servidor)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/run.py",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "ComandaPOS (modo dev, puerto 5001)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/run.py",
+      "args": ["--dev", "--puerto", "5001"],
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "Pruebas (pytest)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    }
+  ]
+}
