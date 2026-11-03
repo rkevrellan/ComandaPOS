@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="ComandaPOS">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fb923c"/>
+      <stop offset="1" stop-color="#dc2626"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#g)"/>
+  <!-- comanda: hoja con esquina doblada -->
+  <path d="M18 12h22l8 8v32a2 2 0 0 1-2 2H18a2 2 0 0 1-2-2V14a2 2 0 0 1 2-2z" fill="#fff"/>
+  <path d="M40 12v8h8" fill="#fed7aa"/>
+  <!-- líneas del pedido -->
+  <rect x="22" y="24" width="16" height="3" rx="1.5" fill="#9a3412"/>
+  <rect x="22" y="31" width="20" height="3" rx="1.5" fill="#fdba74"/>
+  <rect x="22" y="38" width="12" height="3" rx="1.5" fill="#fdba74"/>
+  <!-- visto bueno -->
+  <circle cx="42" cy="46" r="7" fill="#16a34a"/>
+  <path d="M38.5 46l2.5 2.5 4.5-5" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

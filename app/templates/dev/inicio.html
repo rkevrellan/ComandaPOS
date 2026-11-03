@@ -1,0 +1,97 @@
+{% extends "base.html" %} {% block titulo %}Consola del programador{% endblock
+%} {% block contenido %}
+<div class="encabezado-pagina">
+  <h1>Consola del programador</h1>
+  <a class="btn btn-gris" href="{{ url_for('dev.bitacora') }}">Auditoría</a>
+</div>
+
+<div class="tarjetas">
+  <section class="tarjeta">
+    <h2>Sistema</h2>
+    <dl class="pares">
+      <dt>Versión</dt>
+      <dd>{{ VERSION }}</dd>
+      <dt>Modo</dt>
+      <dd>{{ 'Demostración' if DEMO else 'Producción' }}</dd>
+      <dt>Motor de BD</dt>
+      <dd>{{ motor }}</dd>
+      <dt>Tamaño de la BD</dt>
+      <dd>{{ (tamano / 1024) | round(1) }} KB</dd>
+      <dt>Carpeta de datos</dt>
+      <dd><code>{{ datos }}</code></dd>
+    </dl>
+  </section>
+
+  <section class="tarjeta">
+    <h2>Auditoría encadenada</h2>
+    {% if verificacion.ok %}
+    <p class="estado-ok">✔ Cadena íntegra</p>
+    {% else %}
+    <p class="estado-mal">
+      ✘ {{ verificacion.error }}{% if verificacion.registro %} (registro #{{
+      verificacion.registro }}){% endif %}
+    </p>
+    {% endif %}
+    <dl class="pares">
+      <dt>Registros sellados</dt>
+      <dd>{{ verificacion.sellados }}</dd>
+      <dt>Pendientes de sellar</dt>
+      <dd>{{ verificacion.pendientes }}</dd>
+    </dl>
+  </section>
+
+  <section class="tarjeta">
+    <h2>Secuencias (RN-04)</h2>
+    <dl class="pares">
+      {% for s in secuencias %}
+      <dt>{{ s.nombre }}</dt>
+      <dd>{{ s.valor }}</dd>
+      {% endfor %}
+    </dl>
+  </section>
+
+  <section class="tarjeta">
+    <h2>Operadores por nivel</h2>
+    <dl class="pares">
+      {% for clave, nombre in roles.items() %}
+      <dt>{{ nombre }}</dt>
+      <dd>{{ por_rol.get(clave, 0) }}</dd>
+      {% endfor %}
+    </dl>
+  </section>
+
+  <section class="tarjeta">
+    <h2>Eventos de seguridad (desde el arranque)</h2>
+    {% if eventos %}
+    <dl class="pares">
+      {% for tipo, n in eventos %}
+      <dt>{{ tipo }}</dt>
+      <dd>{{ n }}</dd>
+      {% endfor %}
+    </dl>
+    {% else %}
+    <p class="vacio">Sin eventos.</p>
+    {% endif %}
+  </section>
+
+  <section class="tarjeta tarjeta-ancha">
+    <h2>Tablas</h2>
+    <table class="tabla">
+      <thead>
+        <tr>
+          <th>Tabla</th>
+          <th class="num">Registros</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for nombre, total in tablas %}
+        <tr>
+          <td>{{ nombre }}</td>
+          <td class="num">{{ total }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+</div>
+{% endblock %}

@@ -1,0 +1,106 @@
+{% extends "base.html" %} {% block titulo %}Control de acceso{% endblock %} {%
+block clase_body %}pantalla-acceso{% endblock %} {% block clase_main %}acceso{%
+endblock %} {% block contenido %}
+<div class="acceso-fondo" aria-hidden="true">
+  {% for n in range(1, 31) %}<span class="mesa-fantasma">{{ n }}</span>{% endfor
+  %}
+</div>
+
+<section class="tarjeta-acceso" aria-labelledby="titulo-acceso">
+  <div class="acceso-marca">
+    <img
+      src="{{ url_for('static', filename='img/logo.svg') }}"
+      alt=""
+      width="72"
+      height="72"
+    />
+    <div>
+      <p class="acceso-nombre">{{ NOMBRE }}</p>
+      <p class="acceso-version">Versión <b>{{ VERSION }}</b></p>
+    </div>
+  </div>
+  <h1 id="titulo-acceso">Control de acceso</h1>
+
+  <form method="post" class="form-acceso" autocomplete="off" data-teclado-form>
+    {{ csrf_field() }}
+    <label for="usuario">Usuario</label>
+    <input
+      id="usuario"
+      name="usuario"
+      value="{{ usuario }}"
+      maxlength="30"
+      required
+      autocapitalize="none"
+      spellcheck="false"
+      autocomplete="username"
+      data-campo-teclado
+    />
+    <label for="clave">Contraseña o PIN</label>
+    <input
+      id="clave"
+      name="clave"
+      type="password"
+      maxlength="128"
+      required
+      autocomplete="current-password"
+      data-campo-teclado
+    />
+
+    <div class="teclado" role="group" aria-label="Teclado en pantalla">
+      {% for fila in ["1234567890", "QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"] %}
+      <div class="teclado-fila">
+        {% for tecla in fila %}<button
+          type="button"
+          class="tecla"
+          data-tecla="{{ tecla }}"
+        >
+          {{ tecla }}</button
+        >{% endfor %} {% if loop.index == 3 %}<button
+          type="button"
+          class="tecla tecla-ancha"
+          data-accion="borrar"
+          aria-label="Borrar"
+        >
+          ⌫</button
+        >{% endif %} {% if loop.index == 4 %}<button
+          type="button"
+          class="tecla tecla-ancha"
+          data-accion="limpiar"
+        >
+          CLR</button
+        >{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    <button type="submit" class="btn btn-aceptar">Aceptar</button>
+  </form>
+
+  {% if demo %}
+  <details class="cuentas-demo">
+    <summary>Cuentas de demostración</summary>
+    <table>
+      <thead>
+        <tr>
+          <th>Usuario</th>
+          <th>Nivel</th>
+          <th>Clave</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u, n, r, c in demo %}
+        <tr>
+          <td>
+            <button type="button" class="enlace" data-usar-cuenta="{{ u }}">
+              {{ u }}
+            </button>
+          </td>
+          <td>{{ NOMBRE_ROL[r] }}</td>
+          <td><code>{{ c }}</code></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </details>
+  {% endif %}
+</section>
+{% endblock %}

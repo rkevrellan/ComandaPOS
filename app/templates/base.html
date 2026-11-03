@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block titulo %}{{ NOMBRE }}{% endblock %} · {{ NOMBRE }}</title>
+    <link
+      rel="icon"
+      href="{{ url_for('static', filename='img/logo.svg') }}"
+      type="image/svg+xml"
+    />
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/comanda.css') }}"
+    />
+  </head>
+  <body
+    class="{% block clase_body %}{% endblock %}"
+    data-inactividad="{{ INACTIVIDAD }}"
+  >
+    {% if current_user.is_authenticated %}
+    <header class="cabecera">
+      <a class="marca" href="{{ url_for('mesas.control') }}">
+        <img
+          src="{{ url_for('static', filename='img/logo.svg') }}"
+          alt=""
+          width="36"
+          height="36"
+        />
+        <span>{{ NOMBRE }}</span>
+      </a>
+      <div class="cabecera-datos">
+        <span class="dato"
+          ><small>Fecha</small><b data-fecha>--/--/----</b></span
+        >
+        <span class="dato"><small>Hora</small><b data-hora>--:--</b></span>
+        <span class="dato"><small>Turno #</small><b>—</b></span>
+      </div>
+      <div class="cabecera-usuario">
+        <span class="avatar" aria-hidden="true"
+          >{{ current_user.iniciales }}</span
+        >
+        <span class="dato"
+          ><small>{{ current_user.nombre_rol }}</small
+          ><b>{{ current_user.nombre }}</b></span
+        >
+        {% if current_user.rol == 'programador' %}
+        <a class="btn btn-gris" href="{{ url_for('dev.inicio') }}">Consola</a>
+        {% endif %}
+        <form
+          method="post"
+          action="{{ url_for('auth.salir') }}"
+          id="form-salir"
+        >
+          {{ csrf_field() }}
+          <button class="btn btn-salir" type="submit">Salir</button>
+        </form>
+      </div>
+    </header>
+    {% endif %} {% if DEMO and current_user.is_authenticated %}
+    <div class="banda-demo" role="note">
+      Modo demostración — los documentos no tienen validez fiscal.
+    </div>
+    {% endif %}
+    <main class="{% block clase_main %}contenido{% endblock %}">
+      {% with mensajes = get_flashed_messages(with_categories=true) %} {% if
+      mensajes %}
+      <div class="avisos" role="status">
+        {% for categoria, mensaje in mensajes %}
+        <p class="aviso aviso-{{ categoria }}">{{ mensaje }}</p>
+        {% endfor %}
+      </div>
+      {% endif %} {% endwith %} {% block contenido %}{% endblock %}
+    </main>
+    <script
+      src="{{ url_for('static', filename='js/comanda.js') }}"
+      defer
+    ></script>
+  </body>
+</html>

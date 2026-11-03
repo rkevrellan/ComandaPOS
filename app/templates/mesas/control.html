@@ -1,0 +1,91 @@
+{% extends "base.html" %} {% block titulo %}Ocupación de mesas{% endblock %} {%
+block clase_main %}control{% endblock %} {% block contenido %}
+<aside class="panel-izq">
+  <h2 class="panel-titulo">Salas de venta</h2>
+  <nav class="lista-salas">
+    {% for s in salas %}
+    <a
+      class="btn sala {% if sala and s.id == sala.id %}activa{% endif %}"
+      href="{{ url_for('mesas.control', sala=s.id) }}"
+      aria-current="{{ 'page' if sala and s.id == sala.id else 'false' }}"
+      >{{ s.nombre }}</a
+    >
+    {% endfor %}
+  </nav>
+  <dl class="resumen">
+    <div>
+      <dt>Última comanda</dt>
+      <dd>{{ ultima_comanda or '—' }}</dd>
+    </div>
+    <div>
+      <dt>Mesas ocupadas</dt>
+      <dd>{{ conteo['ocupada'] + conteo['precuenta'] }}</dd>
+    </div>
+    <div>
+      <dt>Disponibles</dt>
+      <dd>{{ conteo['disponible'] }}</dd>
+    </div>
+  </dl>
+</aside>
+
+<section class="zona-mesas" aria-labelledby="titulo-mesas">
+  <h1 id="titulo-mesas" class="titulo-seccion">
+    Control · ocupación de mesas <span>{{ sala.nombre if sala else '' }}</span>
+  </h1>
+  {% if mesas %}
+  <ul class="cuadricula-mesas">
+    {% for m in mesas %}
+    <li>
+      <button
+        type="button"
+        class="mesa estado-{{ m.estado }}"
+        disabled
+        title="La toma de pedidos llega en la fase 2"
+        aria-label="Mesa {{ m.numero }}, {{ leyenda[m.estado] }}, {{ m.puestos }} puestos"
+      >
+        <span class="mesa-numero">{{ m.numero }}</span>
+        <svg class="mesa-icono" viewBox="0 0 40 28" aria-hidden="true">
+          <rect x="4" y="6" width="32" height="8" rx="2" />
+          <rect x="8" y="14" width="3" height="12" />
+          <rect x="29" y="14" width="3" height="12" />
+        </svg>
+        <span class="mesa-estado">{{ corto[m.estado] }}</span>
+        {% if m.nombre_especial %}<span class="mesa-nombre"
+          >{{ m.nombre_especial }}</span
+        >{% endif %}
+      </button>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="vacio">
+    Esta sala todavía no tiene mesas. Configúralas en Administración (fase 6).
+  </p>
+  {% endif %}
+</section>
+
+<aside class="panel-der">
+  <h2 class="panel-titulo">Estados</h2>
+  <ul class="leyenda">
+    {% for clave, texto in leyenda.items() %}
+    <li>
+      <span class="chip estado-{{ clave }}">{{ texto }}</span
+      ><b>{{ conteo[clave] }}</b>
+    </li>
+    {% endfor %}
+  </ul>
+  <h2 class="panel-titulo">Pedidos listos</h2>
+  <p class="vacio">
+    Cuando cocina marque un pedido como listo, aparecerá aquí (fase 3).
+  </p>
+</aside>
+
+<nav class="barra-inferior" aria-label="Acciones">
+  <button class="btn" type="button" disabled title="Fase 4">Caja</button>
+  <button class="btn" type="button" disabled title="Fase 2">Notas fijas</button>
+  <button class="btn" type="button" disabled title="Fase 4">Clientes</button>
+  <button class="btn btn-rayo" type="button" disabled title="Fase 4">
+    Pedidos directos · cobro rápido
+  </button>
+</nav>
+{% endblock %}

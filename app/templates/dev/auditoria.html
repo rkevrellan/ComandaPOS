@@ -1,0 +1,53 @@
+{% extends "base.html" %} {% block titulo %}Auditoría{% endblock %} {% block
+contenido %}
+<div class="encabezado-pagina">
+  <h1>Auditoría</h1>
+  <a class="btn btn-gris" href="{{ url_for('dev.inicio') }}">Consola</a>
+</div>
+{% if verificacion.ok %}
+<p class="aviso aviso-ok">
+  ✔ Cadena íntegra: {{ verificacion.sellados }} registros sellados{% if
+  verificacion.pendientes %}, {{ verificacion.pendientes }} pendientes{% endif
+  %}.
+</p>
+{% else %}
+<p class="aviso aviso-error">
+  ✘ {{ verificacion.error }}{% if verificacion.registro %} (registro #{{
+  verificacion.registro }}){% endif %}
+</p>
+{% endif %}
+<table class="tabla">
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>Sello</th>
+      <th>Fecha</th>
+      <th>Acción</th>
+      <th>Operador</th>
+      <th>Autorizó</th>
+      <th>Detalle</th>
+      <th>Terminal</th>
+      <th>Hash</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in registros %}
+    <tr>
+      <td class="num">{{ r.id }}</td>
+      <td class="num">{{ r.sello or '—' }}</td>
+      <td>{{ r.fecha | fecha('%d/%m/%Y %H:%M:%S') }}</td>
+      <td><code>{{ r.accion }}</code></td>
+      <td>{{ r.operador.usuario if r.operador else '—' }}</td>
+      <td>{{ r.autorizador.usuario if r.autorizador else '—' }}</td>
+      <td>{{ r.detalle }}</td>
+      <td>{{ r.terminal }}</td>
+      <td><code title="{{ r.hash or '' }}">{{ (r.hash or '')[:10] }}</code></td>
+    </tr>
+    {% else %}
+    <tr>
+      <td colspan="9" class="vacio">Sin registros.</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
