@@ -235,9 +235,31 @@ CLIENTES = [
 ]
 
 
+def sincronizar_nombres_demo() -> int:
+    """Pone al día los nombres de las cuentas de demostración en una base que ya existía.
+
+    `poblar()` solo actúa con la base vacía; si después cambia un nombre en `CUENTAS_DEMO`,
+    esta función lo aplica (solo al nombre, nunca a credenciales ni roles) y lo audita.
+    """
+    cambios = 0
+    for usuario, nombre, _rol in CUENTAS_DEMO:
+        op = Operador.query.filter_by(usuario=usuario).first()
+        if op is not None and op.nombre != nombre:
+            auditoria.auditar(
+                "nombre_actualizado", f"{usuario}: {op.nombre} → {nombre}", operador=op
+            )
+            op.nombre = nombre
+            cambios += 1
+    if cambios:
+        db.session.commit()
+        auditoria.sellar_pendientes()
+    return cambios
+
+
 def poblar() -> bool:
     """Crea los datos si la base está vacía. Devuelve True si creó algo."""
     if Operador.query.first() is not None:
+        sincronizar_nombres_demo()
         return False
 
     for i, (usuario, nombre, rol) in enumerate(CUENTAS_DEMO, start=1):

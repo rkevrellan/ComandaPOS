@@ -34,3 +34,18 @@ def test_produccion_no_arranca_con_credenciales_de_prueba(app, monkeypatch, tmp_
     llamado = []
     monkeypatch.setattr("waitress.serve", lambda *a, **k: llamado.append(1))
     assert run.main() == 1 and not llamado
+
+
+def test_nombres_demo_se_actualizan_en_una_base_existente(app):
+    """Una base creada con un nombre anterior se pone al día al arrancar (sin tocar la clave)."""
+    from app.extensions import db
+    from seed import poblar
+
+    with app.app_context():
+        dev = Operador.query.filter_by(usuario="dev").one()
+        hash_antes = dev.clave_hash
+        dev.nombre = "Kevin Rojas"
+        db.session.commit()
+        assert poblar() is False
+        dev = Operador.query.filter_by(usuario="dev").one()
+        assert dev.nombre == "Kevin Rellán" and dev.clave_hash == hash_antes
