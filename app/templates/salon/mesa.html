@@ -1,0 +1,79 @@
+{% extends "base.html" %} {% block titulo %}Mesa {{ mesa.numero }}{% endblock %}
+{% block contenido %}
+<section class="tarjeta tarjeta-centro">
+  <p class="chip estado-{{ mesa.estado }}">{{ mesa.estado | capitalize }}</p>
+  <h1>
+    Mesa {{ mesa.numero }}
+    <small
+      >· {{ mesa.sala.nombre }}{{ ' · ' ~ mesa.nombre_especial if
+      mesa.nombre_especial else '' }}</small
+    >
+  </h1>
+
+  {% if mesa.estado == 'disponible' %}
+  <p>¿Cuántas personas hay en la mesa?</p>
+  <form
+    method="post"
+    action="{{ url_for('salon.abrir', numero=mesa.numero) }}"
+    class="teclado-puestos"
+  >
+    {{ csrf_field() }} {% for n in range(1, 13) %}
+    <button class="btn puesto" type="submit" name="puestos" value="{{ n }}">
+      {{ n }}
+    </button>
+    {% endfor %}
+  </form>
+  {% if current_user.puede('supervisor') %}
+  <form
+    method="post"
+    action="{{ url_for('salon.servicio', numero=mesa.numero) }}"
+  >
+    {{ csrf_field() }}<input type="hidden" name="fuera" value="1" />
+    <button class="btn btn-gris" type="submit">Poner fuera de servicio</button>
+  </form>
+  {% endif %} {% elif mesa.estado == 'pagada' %}
+  <p>
+    La mesa ya se cobró. Cuando el personal la limpie, libérala para el
+    siguiente cliente.
+  </p>
+  {% for d in documentos %}
+  <p>
+    <a class="enlace" href="{{ url_for('salon.documento', did=d.id) }}"
+      >Comprobante {{ '%010d' % d.numero }} · B/. {{ d.total | dinero }}</a
+    >
+  </p>
+  {% endfor %}
+  <form
+    method="post"
+    action="{{ url_for('salon.liberar', numero=mesa.numero) }}"
+  >
+    {{ csrf_field() }}
+    <button class="btn btn-aceptar" type="submit">
+      Liberar mesa {{ mesa.numero }}
+    </button>
+  </form>
+
+  {% elif mesa.estado == 'fuera' %}
+  <p>Esta mesa está fuera de servicio.</p>
+  {% if current_user.puede('supervisor') %}
+  <form
+    method="post"
+    action="{{ url_for('salon.servicio', numero=mesa.numero) }}"
+  >
+    {{ csrf_field() }}<input type="hidden" name="fuera" value="0" />
+    <button class="btn btn-aceptar" type="submit">Habilitar mesa</button>
+  </form>
+  {% else %}
+  <p class="vacio">Solo un supervisor puede habilitarla.</p>
+  {% endif %} {% else %}
+  <p>Esta mesa no tiene una comanda abierta.</p>
+  {% endif %}
+  <p>
+    <a
+      class="btn btn-gris"
+      href="{{ url_for('mesas.control', sala=mesa.sala_id) }}"
+      >← Volver a las mesas</a
+    >
+  </p>
+</section>
+{% endblock %}

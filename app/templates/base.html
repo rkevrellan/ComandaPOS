@@ -34,7 +34,10 @@
           ><small>Fecha</small><b data-fecha>--/--/----</b></span
         >
         <span class="dato"><small>Hora</small><b data-hora>--:--</b></span>
-        <span class="dato"><small>Turno #</small><b>—</b></span>
+        <span class="dato"
+          ><small>Turno #</small
+          ><b>{{ TURNO.numero if TURNO else '—' }}</b></span
+        >
       </div>
       <div class="cabecera-usuario">
         <span class="avatar" aria-hidden="true"

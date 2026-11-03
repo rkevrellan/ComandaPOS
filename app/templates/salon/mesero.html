@@ -1,0 +1,46 @@
+{% extends "base.html" %} {% block titulo %}Otro mesero{% endblock %} {% block
+contenido %}
+<section class="tarjeta tarjeta-centro">
+  <h1>
+    Otro mesero
+    <small
+      >comanda {{ comanda.numero }} · atiende {{ comanda.mesero.nombre }}</small
+    >
+  </h1>
+  <form method="post" class="form-columna" autocomplete="off">
+    {{ csrf_field() }}
+    <fieldset>
+      <legend>Pasar la mesa a</legend>
+      <div class="opciones">
+        {% for m in meseros %}
+        <label class="opcion-check"
+          ><input type="radio" name="mesero" value="{{ m.id }}" required /><span
+            >{{ m.nombre }} <small>({{ m.nombre_rol }})</small></span
+          ></label
+        >
+        {% endfor %}
+      </div>
+    </fieldset>
+    {% if not current_user.puede('supervisor') %}
+    <p class="aviso aviso-info">Hace falta la autorización de un supervisor.</p>
+    <label for="sup_usuario">Usuario del supervisor</label>
+    <input
+      id="sup_usuario"
+      name="sup_usuario"
+      autocapitalize="none"
+      maxlength="30"
+    />
+    <label for="sup_clave">Contraseña autorizada</label>
+    <input id="sup_clave" name="sup_clave" type="password" maxlength="128" />
+    {% endif %}
+    <div class="fila-botones">
+      <a
+        class="btn btn-gris"
+        href="{{ url_for('salon.comanda', cid=comanda.id) }}"
+        >Cancelar</a
+      >
+      <button class="btn btn-aceptar" type="submit">Pasar mesa</button>
+    </div>
+  </form>
+</section>
+{% endblock %}

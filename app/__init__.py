@@ -154,11 +154,19 @@ def create_app(config: dict | None = None) -> Flask:
 
 def _registrar_blueprints(app: Flask) -> None:
     from .auth.routes import bp as auth_bp
+    from .caja.routes import bp as caja_bp
+    from .catalogos.routes import bp as catalogos_bp
+    from .cocina.routes import bp as cocina_bp
     from .dev.routes import bp as dev_bp
     from .mesas.routes import bp as mesas_bp
+    from .salon.routes import bp as salon_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(mesas_bp)
+    app.register_blueprint(salon_bp)
+    app.register_blueprint(cocina_bp)
+    app.register_blueprint(caja_bp)
+    app.register_blueprint(catalogos_bp)
     app.register_blueprint(dev_bp, url_prefix="/dev")
 
     from .seguridad import publica
@@ -353,14 +361,22 @@ def _plantillas(app: Flask) -> None:
         csrf_field=lambda: Markup(
             '<input type="hidden" name="csrf_token" value="{}">'.format(_csrf_token())
         ),
+        # RN-05: clave de idempotencia por formulario (un doble toque no repite la acción).
+        idem_field=lambda: Markup(
+            '<input type="hidden" name="idem" value="{}">'.format(secrets.token_hex(16))
+        ),
     )
 
     @app.context_processor
     def contexto():
         inactividad = 0
+        turno = None
         if current_user.is_authenticated:
             inactividad = app.config["INACTIVIDAD_SEG"].get(current_user.rol, 300)
-        return {"DEMO": app.config["DEMO"], "INACTIVIDAD": inactividad}
+            from .services.caja import turno_abierto
+
+            turno = turno_abierto()
+        return {"DEMO": app.config["DEMO"], "INACTIVIDAD": inactividad, "TURNO": turno}
 
     @app.template_filter("dinero")
     def dinero(valor):

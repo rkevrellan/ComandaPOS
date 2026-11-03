@@ -1,0 +1,343 @@
+{% extends "base.html" %} {% block titulo %}Comanda {{ comanda.numero }}{%
+endblock %} {% block clase_main %}pantalla-comanda{% endblock %} {% block
+contenido %} {% set cerrada = comanda.estado != 'abierta' %} {% set pagada =
+cuenta.estado == 'pagada' %}
+
+<header class="comanda-cabecera">
+  <div class="dato grande">
+    <small>{{ 'Mesa' if comanda.mesa else 'Pedido directo' }}</small>
+    <b>{{ comanda.mesa.numero if comanda.mesa else '⚡' }}</b>
+  </div>
+  <nav class="cuentas" aria-label="Cuentas">
+    <small>Cuentas</small>
+    <div class="cuentas-botones">
+      {% for c in comanda.cuentas %}
+      <a
+        class="cuenta-tab estado-cuenta-{{ c.estado }} {{ 'activa' if c.id == cuenta.id else '' }}"
+        href="{{ url_for('salon.comanda', cid=comanda.id, cuenta=c.numero) }}"
+        aria-current="{{ 'page' if c.id == cuenta.id else 'false' }}"
+        >{{ c.numero }}</a
+      >
+      {% endfor %} {% if not cerrada %}
+      <form
+        method="post"
+        action="{{ url_for('salon.cuenta_nueva', cid=comanda.id) }}"
+      >
+        {{ csrf_field() }}
+        <button
+          class="cuenta-tab nueva"
+          type="submit"
+          aria-label="Nueva cuenta"
+        >
+          +
+        </button>
+      </form>
+      {% endif %}
+    </div>
+  </nav>
+  <div class="dato"><small># Comanda</small><b>{{ comanda.numero }}</b></div>
+  <div class="dato">
+    <small>Mesero</small><b>{{ comanda.mesero.nombre }}</b>
+  </div>
+  <div class="dato">
+    <small>Abierta</small><b>{{ comanda.abierta_en | fecha('%I:%M %p') }}</b>
+  </div>
+  <div class="dato"><small>Puestos</small><b>{{ comanda.puestos }}</b></div>
+  <div class="dato total-mesa">
+    <small>Total mesa</small><b>B/. {{ total_mesa | dinero }}</b>
+  </div>
+</header>
+
+{% if request.args.get('pdf') == '1' %}
+<div class="aviso aviso-ok aviso-accion">
+  <span>Pre-cuenta de la cuenta {{ cuenta.numero }} lista.</span>
+  <a
+    class="btn btn-mini"
+    href="{{ url_for('salon.precuenta_pdf', cuenta_id=cuenta.id) }}"
+    target="_blank"
+    rel="noopener"
+    >Imprimir pre-cuenta (PDF)</a
+  >
+</div>
+{% endif %} {% if cerrada %}
+<div class="aviso aviso-info">Esta comanda ya se cobró por completo.</div>
+{% endif %}
+
+<section class="col-pedido">
+  <div class="secciones">
+    {% for s in secciones %}
+    <a
+      class="seccion {{ 'activa' if seccion and s.id == seccion.id else '' }}"
+      data-color="{{ s.color }}"
+      href="{{ url_for('salon.comanda', cid=comanda.id, cuenta=cuenta.numero, seccion=s.id) }}"
+      >{{ s.nombre }}</a
+    >
+    {% endfor %}
+  </div>
+
+  <div class="detalle">
+    <table class="tabla-pedido">
+      <thead>
+        <tr>
+          <th>Producto</th>
+          <th class="num">Cant</th>
+          <th class="num">Precio</th>
+          <th class="num">Sub-total</th>
+          <th>Env</th>
+          <th>Estado</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ln in cuenta.lineas %}
+        <tr
+          class="{{ 'seleccionada' if seleccion and ln.id == seleccion.id else '' }} {{ 'anulada' if ln.estado == 'ANU' else '' }}"
+        >
+          <td>
+            <a
+              class="fila-enlace"
+              href="{{ url_for('salon.comanda', cid=comanda.id, cuenta=cuenta.numero, seccion=seccion.id if seccion else None, linea=ln.id) }}"
+              >{{ ln.descripcion }}</a
+            >
+            {% if ln.acompanamiento %}<small class="sub"
+              >+ {{ ln.acompanamiento }}</small
+            >{% endif %} {% if ln.notas %}<small class="sub nota"
+              >✎ {{ ln.notas }}</small
+            >{% endif %} {% if ln.para_llevar %}<small class="sub llevar"
+              >PARA LLEVAR</small
+            >{% endif %} {% if ln.descuento_pct %}<small class="sub"
+              >Descuento {{ ln.descuento_pct }} %</small
+            >{% endif %}
+          </td>
+          <td class="num">{{ ln.cantidad.normalize() }}</td>
+          <td class="num">{{ ln.precio | dinero }}</td>
+          <td class="num">{{ (ln.cantidad * ln.precio) | dinero }}</td>
+          <td>{{ 'SÍ' if ln.enviado else 'NO' }}</td>
+          <td>
+            <span class="chip linea-{{ ln.estado }}">{{ ln.estado }}</span>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="6" class="vacio">
+            Toca un producto para agregarlo a la cuenta {{ cuenta.numero }}.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <ul class="leyenda-lineas" aria-label="Estados de las líneas">
+    <li><span class="chip linea-PED">PED</span> pedido</li>
+    <li><span class="chip linea-ORD">ORD</span> enviado</li>
+    <li><span class="chip linea-PRO">PRO</span> en proceso</li>
+    <li><span class="chip linea-PRE">PRE</span> listo</li>
+    <li><span class="chip linea-ENT">ENT</span> entregado</li>
+    <li><span class="chip linea-ANU">ANU</span> anulado</li>
+  </ul>
+
+  <dl class="totales">
+    <div>
+      <dt>SB-TOT</dt>
+      <dd>{{ t.subtotal | dinero }}</dd>
+    </div>
+    <div>
+      <dt>DES-PRD</dt>
+      <dd>{{ t.descuento_producto | dinero }}</dd>
+    </div>
+    <div>
+      <dt>DES-JUB</dt>
+      <dd>{{ t.descuento_jubilado | dinero }}</dd>
+    </div>
+    <div>
+      <dt>ITBMS</dt>
+      <dd>{{ t.itbms | dinero }}</dd>
+    </div>
+    <div class="total">
+      <dt>TOTAL cta. {{ cuenta.numero }}</dt>
+      <dd>{{ t.total | dinero }}</dd>
+    </div>
+  </dl>
+</section>
+
+<section class="col-acciones" aria-label="Acciones de la línea">
+  {% if seleccion and not pagada and not cerrada %}
+  <p class="acciones-titulo">{{ seleccion.descripcion }}</p>
+  {% if seleccion.estado == 'PED' %}
+  <div class="par-botones">
+    <form
+      method="post"
+      action="{{ url_for('salon.linea_accion', lid=seleccion.id, accion='menos') }}"
+    >
+      {{ csrf_field() }}<button
+        class="btn accion"
+        type="submit"
+        aria-label="Uno menos"
+      >
+        −
+      </button>
+    </form>
+    <form
+      method="post"
+      action="{{ url_for('salon.linea_accion', lid=seleccion.id, accion='mas') }}"
+    >
+      {{ csrf_field() }}<button
+        class="btn accion"
+        type="submit"
+        aria-label="Uno más"
+      >
+        +
+      </button>
+    </form>
+  </div>
+  <a class="btn accion" href="{{ url_for('salon.notas', lid=seleccion.id) }}"
+    >Notas</a
+  >
+  <form
+    method="post"
+    action="{{ url_for('salon.linea_accion', lid=seleccion.id, accion='llevar') }}"
+  >
+    {{ csrf_field() }}<button class="btn accion" type="submit">
+      {{ 'Quitar llevar' if seleccion.para_llevar else 'Para llevar' }}
+    </button>
+  </form>
+  <form
+    method="post"
+    action="{{ url_for('salon.linea_accion', lid=seleccion.id, accion='borrar') }}"
+  >
+    {{ csrf_field() }}<button class="btn accion peligro" type="submit">
+      Borrar
+    </button>
+  </form>
+  {% elif seleccion.estado != 'ANU' %}
+  <a
+    class="btn accion peligro"
+    href="{{ url_for('salon.anular', lid=seleccion.id) }}"
+    >Error · anular</a
+  >
+  {% if seleccion.estado == 'PRE' %}
+  <form
+    method="post"
+    action="{{ url_for('salon.entregar', lid=seleccion.id) }}"
+  >
+    {{ csrf_field() }}<input
+      type="hidden"
+      name="volver"
+      value="comanda"
+    /><button class="btn accion" type="submit">Entregado</button>
+  </form>
+  {% endif %} {% endif %} {% if seleccion.estado != 'ANU' %}
+  <a
+    class="btn accion"
+    href="{{ url_for('salon.descuento', lid=seleccion.id) }}"
+    >Descuento %</a
+  >
+  <form
+    method="post"
+    action="{{ url_for('salon.mover_linea', lid=seleccion.id) }}"
+    class="mover-cuenta"
+  >
+    {{ csrf_field() }}
+    <label for="destino">Pasar a cuenta</label>
+    <select id="destino" name="destino">
+      {% for c in comanda.cuentas %}{% if c.estado != 'pagada' and c.id !=
+      cuenta.id %}
+      <option value="{{ c.numero }}">Cuenta {{ c.numero }}</option>
+      {% endif %}{% endfor %}
+      <option value="{{ cuenta.numero }}">Cuenta nueva</option>
+    </select>
+    <button class="btn accion" type="submit">Separar</button>
+  </form>
+  {% endif %} {% elif pagada %}
+  <p class="vacio">La cuenta {{ cuenta.numero }} ya está pagada.</p>
+  {% else %}
+  <p class="vacio">
+    Toca una línea del pedido para cambiarla, ponerle notas o anularla.
+  </p>
+  {% endif %}
+</section>
+
+<section
+  class="col-productos"
+  aria-label="Productos de {{ seccion.nombre if seccion else '' }}"
+>
+  {% if not pagada and not cerrada %}
+  <div class="productos">
+    {% for p in productos %} {% if not p.disponible %}
+    <span class="producto agotado"
+      ><span class="precio">{{ p.precio | dinero }}</span
+      ><span class="nombre">{{ p.descripcion_corta }}</span
+      ><span class="marca">AGOTADO</span></span
+    >
+    {% elif p.con_acompanamiento %}
+    <a
+      class="producto"
+      href="{{ url_for('salon.acompanamiento', cid=comanda.id, pid=p.id, cuenta=cuenta.numero) }}"
+      ><span class="precio">{{ p.precio | dinero }}</span
+      ><span class="nombre">{{ p.descripcion_corta }}</span
+      ><span class="marca">+ acomp.</span></a
+    >
+    {% else %}
+    <form method="post" action="{{ url_for('salon.agregar', cid=comanda.id) }}">
+      {{ csrf_field() }}{{ idem_field() }}
+      <input type="hidden" name="producto" value="{{ p.id }}" />
+      <input type="hidden" name="cuenta" value="{{ cuenta.numero }}" />
+      <button class="producto" type="submit">
+        <span class="precio">{{ p.precio | dinero }}</span
+        ><span class="nombre">{{ p.descripcion_corta }}</span>
+      </button>
+    </form>
+    {% endif %} {% else %}
+    <p class="vacio">Esta sección no tiene productos.</p>
+    {% endfor %}
+  </div>
+  {% endif %}
+</section>
+
+<nav class="comanda-barra" aria-label="Acciones de la comanda">
+  <a
+    class="btn"
+    href="{{ url_for('mesas.control', sala=comanda.mesa.sala_id if comanda.mesa else None) }}"
+    >← Mesas</a
+  >
+  {% if not cerrada %}
+  <form method="post" action="{{ url_for('salon.enviar', cid=comanda.id) }}">
+    {{ csrf_field() }}{{ idem_field() }}
+    <input type="hidden" name="cuenta" value="{{ cuenta.numero }}" />
+    <button class="btn btn-enviar" type="submit">
+      Enviar pedidos{{ ' (' ~ pendientes ~ ')' if pendientes else '' }}
+    </button>
+  </form>
+  {% if not pagada %}
+  <a class="btn" href="{{ url_for('salon.jubilado', cuenta_id=cuenta.id) }}"
+    >Jubilado %{{ ' ✔' if cuenta.jubilado_cedula else '' }}</a
+  >
+  <form
+    method="post"
+    action="{{ url_for('salon.precuenta', cuenta_id=cuenta.id) }}"
+  >
+    {{ csrf_field() }}
+    <button class="btn" type="submit">Pre-cuenta</button>
+  </form>
+  {% if es_cajero %}
+  <a
+    class="btn btn-cobrar"
+    href="{{ url_for('salon.cobrar', cuenta_id=cuenta.id) }}"
+    >Cobrar cta. {{ cuenta.numero }}</a
+  >
+  {% endif %} {% endif %} {% if comanda.mesa %}
+  <a class="btn" href="{{ url_for('salon.mover', cid=comanda.id) }}"
+    >Mover mesa</a
+  >
+  {% endif %}
+  <a class="btn" href="{{ url_for('salon.otro_mesero', cid=comanda.id) }}"
+    >Otro mesero</a
+  >
+  {% endif %} {% if cerrada or pagada %}
+  <a
+    class="btn btn-cobrar"
+    href="{{ url_for('salon.cobrar', cuenta_id=cuenta.id) if es_cajero else url_for('mesas.control') }}"
+    >{{ 'Ver comprobante' if es_cajero else 'Volver' }}</a
+  >
+  {% endif %}
+</nav>
+{% endblock %}

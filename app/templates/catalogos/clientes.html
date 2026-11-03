@@ -1,0 +1,131 @@
+{% extends "base.html" %} {% block titulo %}Clientes{% endblock %} {% block
+contenido %}
+<div class="encabezado-pagina">
+  <h1>Clientes</h1>
+  <a class="btn btn-gris" href="{{ url_for('mesas.control') }}">← Mesas</a>
+</div>
+<div class="tarjetas">
+  <section class="tarjeta tarjeta-ancha">
+    <form method="get" class="fila-botones">
+      <input
+        name="q"
+        value="{{ q }}"
+        maxlength="40"
+        placeholder="Buscar por nombre o RUC"
+        aria-label="Buscar cliente"
+      />
+      <button class="btn corto" type="submit">Buscar</button>
+    </form>
+    <table class="tabla">
+      <thead>
+        <tr>
+          <th>Cédula / RUC</th>
+          <th>DV</th>
+          <th>Nombre / compañía</th>
+          <th>Tipo</th>
+          <th>Pago</th>
+          <th class="num">Crédito disponible</th>
+          <th>Estado</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in clientes %}
+        <tr class="{{ '' if c.activo else 'inactiva' }}">
+          <td>{{ c.ruc }}</td>
+          <td>{{ c.dv or '' }}</td>
+          <td>{{ c.nombre }}</td>
+          <td>{{ tipos[c.tipo] }}</td>
+          <td>{{ pagos[c.tipo_pago] }}</td>
+          <td class="num">
+            {{ (c.limite_credito - usado[c.id]) | dinero if c.id in usado else
+            '—' }}
+          </td>
+          <td>{{ 'Activo' if c.activo else 'Inactivo' }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" class="vacio">Sin resultados.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="tarjeta tarjeta-ancha">
+    <h2>Crear cliente contribuyente</h2>
+    <p class="vacio">
+      El consumidor final no se registra: se escribe su nombre al cobrar.
+    </p>
+    <form
+      method="post"
+      action="{{ url_for('catalogos.cliente_nuevo') }}"
+      class="form-rejilla"
+      autocomplete="off"
+    >
+      {{ csrf_field() }}
+      <input
+        type="hidden"
+        name="cuenta"
+        value="{{ request.args.get('cuenta', '') }}"
+      />
+      <label
+        >Tipo
+        <select name="tipo">
+          {% for clave, nombre in tipos.items() %}{% if clave !=
+          'consumidor_final' %}
+          <option value="{{ clave }}">{{ nombre }}</option>
+          {% endif %}{% endfor %}
+        </select>
+      </label>
+      <label
+        >Cédula / RUC / pasaporte
+        <input
+          name="ruc"
+          maxlength="30"
+          required
+          value="{{ previo.get('ruc', '') }}"
+      /></label>
+      <label
+        >DV
+        <input
+          name="dv"
+          maxlength="3"
+          inputmode="numeric"
+          value="{{ previo.get('dv', '') }}"
+      /></label>
+      <label class="ancho"
+        >Nombre o razón social
+        <input
+          name="nombre"
+          maxlength="120"
+          required
+          value="{{ previo.get('nombre', '') }}"
+      /></label>
+      <label
+        >Correo (para enviar el comprobante)
+        <input
+          name="correo"
+          maxlength="120"
+          type="email"
+          value="{{ previo.get('correo', '') }}"
+      /></label>
+      <label
+        >Tipo de pago
+        <select name="tipo_pago">
+          {% for clave, nombre in pagos.items() %}
+          <option value="{{ clave }}">{{ nombre }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label
+        >Límite de crédito (supervisor)
+        <input
+          name="limite"
+          inputmode="decimal"
+          value="{{ previo.get('limite', '0.00') }}"
+      /></label>
+      <button class="btn btn-aceptar" type="submit">Crear cliente</button>
+    </form>
+  </section>
+</div>
+{% endblock %}

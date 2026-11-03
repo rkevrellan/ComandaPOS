@@ -5,7 +5,7 @@ block clase_main %}control{% endblock %} {% block contenido %}
   <nav class="lista-salas">
     {% for s in salas %}
     <a
-      class="btn sala {% if sala and s.id == sala.id %}activa{% endif %}"
+      class="btn sala {{ 'activa' if sala and s.id == sala.id else '' }}"
       href="{{ url_for('mesas.control', sala=s.id) }}"
       aria-current="{{ 'page' if sala and s.id == sala.id else 'false' }}"
       >{{ s.nombre }}</a
@@ -26,6 +26,16 @@ block clase_main %}control{% endblock %} {% block contenido %}
       <dd>{{ conteo['disponible'] }}</dd>
     </div>
   </dl>
+  {% if rapidas %}
+  <h2 class="panel-titulo">Pedidos directos abiertos</h2>
+  <div class="lista-salas">
+    {% for c in rapidas %}
+    <a class="btn btn-rayo" href="{{ url_for('salon.comanda', cid=c.id) }}"
+      >Comanda {{ c.numero }}</a
+    >
+    {% endfor %}
+  </div>
+  {% endif %}
 </aside>
 
 <section class="zona-mesas" aria-labelledby="titulo-mesas">
@@ -34,33 +44,33 @@ block clase_main %}control{% endblock %} {% block contenido %}
   </h1>
   {% if mesas %}
   <ul class="cuadricula-mesas">
-    {% for m in mesas %}
+    {% for m in mesas %} {% set datos = info.get(m.id) %}
     <li>
-      <button
-        type="button"
-        class="mesa estado-{{ m.estado }}"
-        disabled
-        title="La toma de pedidos llega en la fase 2"
+      <a
+        class="mesa estado-{{ m.estado }} {{ 'ajena' if datos and not datos.propia else '' }}"
+        href="{{ url_for('salon.mesa', numero=m.numero) }}"
         aria-label="Mesa {{ m.numero }}, {{ leyenda[m.estado] }}, {{ m.puestos }} puestos"
       >
         <span class="mesa-numero">{{ m.numero }}</span>
+        {% if datos %}
+        <span class="mesa-info"
+          ><b>{{ datos.mesero }}</b> · {{ datos.minutos }}′</span
+        >
+        <span class="mesa-total">B/. {{ datos.total | dinero }}</span>
+        {% else %}
         <svg class="mesa-icono" viewBox="0 0 40 28" aria-hidden="true">
           <rect x="4" y="6" width="32" height="8" rx="2" />
           <rect x="8" y="14" width="3" height="12" />
           <rect x="29" y="14" width="3" height="12" />
         </svg>
+        {% endif %}
         <span class="mesa-estado">{{ corto[m.estado] }}</span>
-        {% if m.nombre_especial %}<span class="mesa-nombre"
-          >{{ m.nombre_especial }}</span
-        >{% endif %}
-      </button>
+      </a>
     </li>
     {% endfor %}
   </ul>
   {% else %}
-  <p class="vacio">
-    Esta sala todavía no tiene mesas. Configúralas en Administración (fase 6).
-  </p>
+  <p class="vacio">Esta sala todavía no tiene mesas.</p>
   {% endif %}
 </section>
 
@@ -75,17 +85,47 @@ block clase_main %}control{% endblock %} {% block contenido %}
     {% endfor %}
   </ul>
   <h2 class="panel-titulo">Pedidos listos</h2>
+  {% if listos %}
+  <ul class="listos">
+    {% for ln in listos %}
+    <li class="listo">
+      <span
+        ><b
+          >{{ 'Mesa ' ~ ln.cuenta.comanda.mesa.numero if ln.cuenta.comanda.mesa
+          else 'Directo ' ~ ln.cuenta.comanda.numero }}</b
+        ><br />{{ ln.cantidad.normalize() }} × {{ ln.descripcion }}</span
+      >
+      <form method="post" action="{{ url_for('salon.entregar', lid=ln.id) }}">
+        {{ csrf_field() }}
+        <button class="btn btn-mini" type="submit">Entregado</button>
+      </form>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
   <p class="vacio">
-    Cuando cocina marque un pedido como listo, aparecerá aquí (fase 3).
+    Nada listo por ahora. Cuando cocina marque un pedido como listo aparecerá
+    aquí.
   </p>
+  {% endif %}
 </aside>
 
 <nav class="barra-inferior" aria-label="Acciones">
-  <button class="btn" type="button" disabled title="Fase 4">Caja</button>
-  <button class="btn" type="button" disabled title="Fase 2">Notas fijas</button>
-  <button class="btn" type="button" disabled title="Fase 4">Clientes</button>
-  <button class="btn btn-rayo" type="button" disabled title="Fase 4">
-    Pedidos directos · cobro rápido
-  </button>
+  {% if current_user.puede('cajero') %}
+  <a class="btn" href="{{ url_for('caja.inicio') }}"
+    >Caja{{ ' · turno ' ~ TURNO.numero if TURNO else ' · sin turno' }}</a
+  >
+  {% endif %}
+  <a class="btn" href="{{ url_for('catalogos.notas') }}">Notas fijas</a>
+  {% if current_user.puede('cajero') %}
+  <a class="btn" href="{{ url_for('catalogos.clientes') }}">Clientes</a>
+  {% endif %}
+  <a class="btn" href="{{ url_for('cocina.tablero') }}">Cocina</a>
+  <form method="post" action="{{ url_for('salon.rapido') }}" class="crece">
+    {{ csrf_field() }}
+    <button class="btn btn-rayo ancho" type="submit">
+      Pedidos directos · cobro rápido
+    </button>
+  </form>
 </nav>
 {% endblock %}

@@ -1,0 +1,189 @@
+{% extends "base.html" %} {% block titulo %}Cobrar{% endblock %} {% block
+clase_main %}pantalla-cobro{% endblock %} {% block contenido %}
+<section class="cobro-resumen tarjeta">
+  <h1>
+    Cobrar
+    <small
+      >{{ 'Mesa ' ~ cuenta.comanda.mesa.numero if cuenta.comanda.mesa else
+      'Pedido directo' }} · comanda {{ cuenta.comanda.numero }} · cuenta {{
+      cuenta.numero }}</small
+    >
+  </h1>
+  <table class="tabla">
+    <tbody>
+      {% for ln in cuenta.activas %}
+      <tr>
+        <td>
+          {{ ln.cantidad.normalize() }} × {{ ln.descripcion }}{{ ' + ' ~
+          ln.acompanamiento if ln.acompanamiento else '' }}
+        </td>
+        <td class="num">{{ (ln.cantidad * ln.precio) | dinero }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <dl class="totales">
+    <div>
+      <dt>SB-TOT</dt>
+      <dd>{{ t.subtotal | dinero }}</dd>
+    </div>
+    <div>
+      <dt>DES-PRD</dt>
+      <dd>{{ t.descuento_producto | dinero }}</dd>
+    </div>
+    <div>
+      <dt>DES-JUB</dt>
+      <dd>{{ t.descuento_jubilado | dinero }}</dd>
+    </div>
+    <div>
+      <dt>ITBMS</dt>
+      <dd>{{ t.itbms | dinero }}</dd>
+    </div>
+    <div class="total">
+      <dt>TOTAL</dt>
+      <dd>{{ t.total | dinero }}</dd>
+    </div>
+  </dl>
+
+  <h2>Cliente</h2>
+  <p class="cliente-actual">
+    {% if cuenta.cliente %}<b>{{ cuenta.cliente.nombre }}</b> · RUC {{
+    cuenta.cliente.ruc }}{{ ' DV ' ~ cuenta.cliente.dv if cuenta.cliente.dv else
+    '' }} {% if credito is not none %}<br /><small
+      >Crédito disponible: B/. {{ credito | dinero }}</small
+    >{% endif %} {% else %}<b
+      >{{ cuenta.nombre_consumidor or 'CONSUMIDOR FINAL' }}</b
+    >
+    · RUC 00-00-00{% endif %}
+  </p>
+  <form method="get" class="fila-botones">
+    <input
+      name="q"
+      value="{{ q }}"
+      placeholder="Buscar cliente por nombre o RUC"
+      aria-label="Buscar cliente"
+      maxlength="40"
+    />
+    <button class="btn" type="submit">Buscar</button>
+  </form>
+  {% if clientes %}
+  <div class="opciones">
+    {% for c in clientes %}
+    <form
+      method="post"
+      action="{{ url_for('salon.cliente', cuenta_id=cuenta.id) }}"
+    >
+      {{ csrf_field() }}<input
+        type="hidden"
+        name="cliente"
+        value="{{ c.id }}"
+      />
+      <button class="btn opcion" type="submit">
+        {{ c.nombre }} <small>{{ c.ruc }}</small>
+      </button>
+    </form>
+    {% endfor %}
+  </div>
+  {% elif q %}
+  <p class="vacio">
+    No hay clientes con «{{ q }}».
+    <a
+      class="enlace"
+      href="{{ url_for('catalogos.clientes', cuenta=cuenta.id) }}"
+      >Crear cliente</a
+    >
+  </p>
+  {% endif %}
+  <form
+    method="post"
+    action="{{ url_for('salon.cliente', cuenta_id=cuenta.id) }}"
+    class="fila-botones"
+  >
+    {{ csrf_field() }}
+    <input
+      name="nombre"
+      maxlength="80"
+      placeholder="Consumidor final con nombre (opcional)"
+      aria-label="Nombre del consumidor final"
+    />
+    <button class="btn" type="submit">Consumidor final</button>
+  </form>
+</section>
+
+<section class="cobro-pago tarjeta">
+  {% if not turno %}
+  <p class="aviso aviso-error">
+    No hay un turno de caja abierto.
+    <a class="enlace" href="{{ url_for('caja.inicio') }}">Abrir turno</a>
+  </p>
+  {% endif %}
+  <h2>Forma de pago <small>(puedes combinar varias)</small></h2>
+  <form
+    method="post"
+    class="form-pago"
+    autocomplete="off"
+    data-total="{{ t.total }}"
+  >
+    {{ csrf_field() }}{{ idem_field() }} {% for clave, nombre in formas.items()
+    %}
+    <div class="pago-fila">
+      <label for="pago-{{ clave }}">{{ nombre }}</label>
+      <input
+        id="pago-{{ clave }}"
+        name="{{ clave }}"
+        inputmode="decimal"
+        placeholder="0.00"
+        value="{{ previo.get(clave, '') }}"
+        data-pago
+      />
+      {% if clave in ('visa', 'mastercard', 'clave', 'yappy') %}
+      <input
+        name="{{ clave }}_ref"
+        placeholder="Autorización"
+        maxlength="12"
+        aria-label="Código de autorización {{ nombre }}"
+        value="{{ previo.get(clave ~ '_ref', '') }}"
+      />
+      {% else %}<span></span>{% endif %}
+    </div>
+    {% endfor %}
+    <div class="billetes" aria-label="Efectivo rápido">
+      <button class="btn btn-mini" type="button" data-efectivo="{{ t.total }}">
+        Exacto
+      </button>
+      {% for b in billetes %}<button
+        class="btn btn-mini"
+        type="button"
+        data-efectivo="{{ b }}"
+      >
+        {{ b | dinero }}</button
+      >{% endfor %}
+      <button class="btn btn-mini" type="button" data-limpiar-pago>CLR</button>
+    </div>
+    <dl class="totales cobro-calculo">
+      <div>
+        <dt>Total</dt>
+        <dd>{{ t.total | dinero }}</dd>
+      </div>
+      <div>
+        <dt>Recibido</dt>
+        <dd data-recibido>0.00</dd>
+      </div>
+      <div class="total">
+        <dt data-etiqueta-saldo>Falta</dt>
+        <dd data-saldo>{{ t.total | dinero }}</dd>
+      </div>
+    </dl>
+    <div class="fila-botones">
+      <a
+        class="btn btn-gris"
+        href="{{ url_for('salon.comanda', cid=cuenta.comanda_id, cuenta=cuenta.numero) }}"
+        >Volver</a
+      >
+      <button class="btn btn-aceptar" type="submit" data-un-solo-envio>
+        EXE · cobrar
+      </button>
+    </div>
+  </form>
+</section>
+{% endblock %}

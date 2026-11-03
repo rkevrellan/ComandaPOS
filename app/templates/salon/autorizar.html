@@ -1,0 +1,75 @@
+{% extends "base.html" %} {% block titulo %}{{ 'Anulación de productos' if modo
+== 'anular' else 'Descuento' }}{% endblock %} {% block contenido %}
+<section class="tarjeta tarjeta-centro">
+  {% if modo == 'anular' %}
+  <h1>Anulación de productos</h1>
+  <p>
+    <b>{{ linea.cantidad.normalize() }} × {{ linea.descripcion }}</b> · estado
+    {{ linea.estado }}. La línea queda anulada (no se borra) y se avisa a su
+    área.
+  </p>
+  {% else %}
+  <h1>Descuento al producto</h1>
+  <p>
+    <b>{{ linea.cantidad.normalize() }} × {{ linea.descripcion }}</b> · B/. {{
+    (linea.cantidad * linea.precio) | dinero }}
+  </p>
+  {% endif %}
+
+  <form method="post" class="form-columna" autocomplete="off">
+    {{ csrf_field() }} {% if modo == 'anular' %}
+    <label for="motivo">Explicación (obligatoria)</label>
+    <input
+      id="motivo"
+      name="motivo"
+      minlength="10"
+      maxlength="200"
+      required
+      value="{{ motivo }}"
+    />
+    {% else %}
+    <label for="pct">Porcentaje de descuento (0 a 100)</label>
+    <input
+      id="pct"
+      name="pct"
+      inputmode="numeric"
+      pattern="[0-9]{1,3}"
+      required
+      value="{{ linea.descuento_pct }}"
+    />
+    {% endif %} {% if not current_user.puede('supervisor') %}
+    <p class="aviso aviso-info">
+      {{ 'Hace falta' if modo == 'anular' else 'Por encima del tope hace falta'
+      }} la autorización de un supervisor: que escriba su usuario y su clave.
+    </p>
+    <label for="sup_usuario">Usuario del supervisor</label>
+    <input
+      id="sup_usuario"
+      name="sup_usuario"
+      autocapitalize="none"
+      maxlength="30"
+    />
+    <label for="sup_clave">Contraseña autorizada</label>
+    <input id="sup_clave" name="sup_clave" type="password" maxlength="128" />
+    {% else %}
+    <p class="vacio">
+      Autoriza: {{ current_user.nombre }} ({{ current_user.nombre_rol }}).
+    </p>
+    {% endif %}
+
+    <div class="fila-botones">
+      <a
+        class="btn btn-gris"
+        href="{{ url_for('salon.comanda', cid=linea.cuenta.comanda_id, cuenta=linea.cuenta.numero, linea=linea.id) }}"
+        >Cancelar</a
+      >
+      <button
+        class="btn {{ 'peligro' if modo == 'anular' else 'btn-aceptar' }}"
+        type="submit"
+      >
+        {{ 'Aplicar anulación' if modo == 'anular' else 'Aplicar descuento' }}
+      </button>
+    </div>
+  </form>
+</section>
+{% endblock %}

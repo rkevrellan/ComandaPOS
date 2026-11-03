@@ -1,8 +1,8 @@
-"""Modelo de datos de ComandaPOS (fase 1: catálogos, operadores, secuencias y auditoría).
+"""Modelo de datos de ComandaPOS: catálogos, operadores, salón, caja, comprobantes y auditoría.
 
 El dinero NUNCA se guarda como float: `Dinero` lo almacena en centavos enteros y lo devuelve
-como `Decimal` con 2 decimales; `Cantidad` hace lo mismo con milésimas (RN-01). Las tablas de
-comandas, cuentas, pagos y documentos fiscales llegan en las fases 2, 4 y 5.
+como `Decimal` con 2 decimales; `Cantidad` hace lo mismo con milésimas (RN-01). Precio, tasa y
+descripción de cada línea quedan CONGELADOS al pedir: cambiar el menú no altera cuentas abiertas.
 """
 
 from __future__ import annotations
@@ -47,11 +47,13 @@ class _Escalado(types.TypeDecorator):
 
 
 class Dinero(_Escalado):
+    cache_ok = True
     escala = 100
     paso = CENTAVO
 
 
 class Cantidad(_Escalado):
+    cache_ok = True
     escala = 1000
     paso = MILESIMA
 
@@ -281,3 +283,236 @@ class Auditoria(db.Model):
 
     operador = db.relationship("Operador", foreign_keys=[operador_id])
     autorizador = db.relationship("Operador", foreign_keys=[autorizador_id])
+
+
+class Idempotencia(db.Model):
+    """RN-05: cada acción sensible lleva una clave única; un doble toque o un reintento no se repite."""
+
+    __tablename__ = "idempotencia"
+    clave = db.Column(db.String(64), primary_key=True)
+    accion = db.Column(db.String(30), nullable=False)
+    creado = db.Column(db.DateTime, nullable=False, default=ahora)
+
+
+# --------------------------------------------------------------------------- salón (fase 2)
+class Comanda(db.Model):
+    """Pedido de una mesa (o de mostrador, si es «cobro rápido»). Agrupa 1..n cuentas."""
+
+    __tablename__ = "comandas"
+    id = db.Column(db.Integer, primary_key=True)
+    numero = db.Column(db.Integer, unique=True, nullable=False)
+    tipo = db.Column(db.String(10), nullable=False, default="mesa")  # mesa | rapido
+    mesa_id = db.Column(db.Integer, db.ForeignKey("mesas.id"))
+    mesero_id = db.Column(db.Integer, db.ForeignKey("operadores.id"), nullable=False)
+    puestos = db.Column(db.Integer, nullable=False, default=1)
+    estado = db.Column(
+        db.String(10), nullable=False, default="abierta"
+    )  # abierta | cerrada
+    abierta_en = db.Column(db.DateTime, nullable=False, default=ahora)
+    cerrada_en = db.Column(db.DateTime)
+
+    mesa = db.relationship("Mesa")
+    mesero = db.relationship("Operador")
+    cuentas = db.relationship(
+        "Cuenta",
+        back_populates="comanda",
+        order_by="Cuenta.numero",
+        cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (
+        db.CheckConstraint("tipo IN ('mesa','rapido')", name="ck_comanda_tipo"),
+        db.CheckConstraint("estado IN ('abierta','cerrada')", name="ck_comanda_estado"),
+    )
+
+
+class Cuenta(db.Model):
+    """Cuenta de una comanda: se cobra y se factura por separado (cuentas separadas)."""
+
+    __tablename__ = "cuentas"
+    id = db.Column(db.Integer, primary_key=True)
+    comanda_id = db.Column(db.Integer, db.ForeignKey("comandas.id"), nullable=False)
+    numero = db.Column(db.Integer, nullable=False)
+    estado = db.Column(
+        db.String(10), nullable=False, default="abierta"
+    )  # abierta | precuenta | pagada
+    cliente_id = db.Column(db.Integer, db.ForeignKey("clientes.id"))
+    nombre_consumidor = db.Column(
+        db.String(80)
+    )  # consumidor final con nombre (no se guarda como cliente)
+    jubilado_cedula = db.Column(db.String(20))
+    jubilado_nombre = db.Column(db.String(80))
+    pagada_en = db.Column(db.DateTime)
+
+    comanda = db.relationship("Comanda", back_populates="cuentas")
+    cliente = db.relationship("Cliente")
+    lineas = db.relationship(
+        "LineaPedido",
+        back_populates="cuenta",
+        order_by="LineaPedido.id",
+        cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint("comanda_id", "numero", name="uq_cuenta_numero"),
+        db.CheckConstraint(
+            "estado IN ('abierta','precuenta','pagada')", name="ck_cuenta_estado"
+        ),
+    )
+
+    @property
+    def activas(self) -> list:
+        return [ln for ln in self.lineas if ln.estado != "ANU"]
+
+
+ESTADOS_LINEA = ("PED", "ORD", "PRO", "PRE", "ENT", "ANU")
+
+
+class LineaPedido(db.Model):
+    """Una línea de la comanda. Precio, tasa y descripción quedan CONGELADOS al pedir."""
+
+    __tablename__ = "lineas_pedido"
+    id = db.Column(db.Integer, primary_key=True)
+    cuenta_id = db.Column(
+        db.Integer, db.ForeignKey("cuentas.id"), nullable=False, index=True
+    )
+    producto_id = db.Column(db.Integer, db.ForeignKey("productos.id"), nullable=False)
+    mesero_id = db.Column(db.Integer, db.ForeignKey("operadores.id"), nullable=False)
+    area_id = db.Column(
+        db.Integer, db.ForeignKey("areas_produccion.id"), nullable=False
+    )
+    descripcion = db.Column(db.String(60), nullable=False)
+    acompanamiento = db.Column(db.String(60))
+    cantidad = db.Column(Cantidad, nullable=False)
+    precio = db.Column(
+        Dinero, nullable=False
+    )  # unitario, incluye el adicional del acompañamiento
+    tasa_itbms = db.Column(db.Integer, nullable=False)
+    descuento_pct = db.Column(db.Integer, nullable=False, default=0)
+    aplica_jubilado = db.Column(db.Boolean, nullable=False, default=True)
+    estado = db.Column(db.String(3), nullable=False, default="PED")
+    enviado = db.Column(db.Boolean, nullable=False, default=False)
+    para_llevar = db.Column(db.Boolean, nullable=False, default=False)
+    notas = db.Column(db.String(200), nullable=False, default="")
+    creado = db.Column(db.DateTime, nullable=False, default=ahora)
+    enviado_en = db.Column(db.DateTime)
+    listo_en = db.Column(db.DateTime)
+    entregado_en = db.Column(db.DateTime)
+
+    cuenta = db.relationship("Cuenta", back_populates="lineas")
+    producto = db.relationship("Producto")
+    area = db.relationship("AreaProduccion")
+
+    __table_args__ = (
+        db.CheckConstraint(
+            "estado IN ('PED','ORD','PRO','PRE','ENT','ANU')", name="ck_linea_estado"
+        ),
+        db.CheckConstraint("cantidad > 0", name="ck_linea_cantidad"),
+        db.CheckConstraint(
+            "descuento_pct BETWEEN 0 AND 100", name="ck_linea_descuento"
+        ),
+        db.CheckConstraint("tasa_itbms IN (0, 7, 10, 15)", name="ck_linea_tasa"),
+    )
+
+
+class Anulacion(db.Model):
+    __tablename__ = "anulaciones"
+    id = db.Column(db.Integer, primary_key=True)
+    linea_id = db.Column(
+        db.Integer, db.ForeignKey("lineas_pedido.id"), nullable=False, unique=True
+    )
+    solicitante_id = db.Column(
+        db.Integer, db.ForeignKey("operadores.id"), nullable=False
+    )
+    autorizador_id = db.Column(
+        db.Integer, db.ForeignKey("operadores.id"), nullable=False
+    )
+    motivo = db.Column(db.String(200), nullable=False)
+    fecha = db.Column(db.DateTime, nullable=False, default=ahora)
+
+    linea = db.relationship("LineaPedido")
+    solicitante = db.relationship("Operador", foreign_keys=[solicitante_id])
+    autorizador = db.relationship("Operador", foreign_keys=[autorizador_id])
+
+
+# --------------------------------------------------------------------------- caja (fase 4)
+class Turno(db.Model):
+    __tablename__ = "turnos"
+    id = db.Column(db.Integer, primary_key=True)
+    numero = db.Column(db.Integer, unique=True, nullable=False)
+    cajero_id = db.Column(db.Integer, db.ForeignKey("operadores.id"), nullable=False)
+    fondo = db.Column(Dinero, nullable=False)
+    abierto_en = db.Column(db.DateTime, nullable=False, default=ahora)
+    cerrado_en = db.Column(db.DateTime)
+    cerrado_por_id = db.Column(db.Integer, db.ForeignKey("operadores.id"))
+    efectivo_esperado = db.Column(Dinero)
+    efectivo_contado = db.Column(Dinero)
+    diferencia = db.Column(Dinero)
+    justificacion = db.Column(db.String(200))
+
+    cajero = db.relationship("Operador", foreign_keys=[cajero_id])
+    cerrado_por = db.relationship("Operador", foreign_keys=[cerrado_por_id])
+    pagos = db.relationship("Pago", back_populates="turno")
+
+
+FORMAS_PAGO = {
+    "efectivo": "Efectivo",
+    "visa": "Visa",
+    "mastercard": "Mastercard",
+    "clave": "Clave",
+    "yappy": "Yappy",
+    "credito": "Crédito",
+}
+
+
+class Pago(db.Model):
+    __tablename__ = "pagos"
+    id = db.Column(db.Integer, primary_key=True)
+    cuenta_id = db.Column(
+        db.Integer, db.ForeignKey("cuentas.id"), nullable=False, index=True
+    )
+    turno_id = db.Column(
+        db.Integer, db.ForeignKey("turnos.id"), nullable=False, index=True
+    )
+    cajero_id = db.Column(db.Integer, db.ForeignKey("operadores.id"), nullable=False)
+    forma = db.Column(db.String(12), nullable=False)
+    monto = db.Column(Dinero, nullable=False)  # lo que se aplica a la cuenta
+    recibido = db.Column(Dinero, nullable=False)  # en efectivo puede ser mayor (vuelto)
+    vuelto = db.Column(Dinero, nullable=False, default=Decimal("0.00"))
+    referencia = db.Column(db.String(20))
+    fecha = db.Column(db.DateTime, nullable=False, default=ahora)
+
+    cuenta = db.relationship("Cuenta")
+    turno = db.relationship("Turno", back_populates="pagos")
+    cajero = db.relationship("Operador")
+
+    __table_args__ = (db.CheckConstraint("monto > 0", name="ck_pago_monto"),)
+
+
+class Documento(db.Model):
+    """Comprobante emitido al cobrar. En la fase 5 se autoriza con el PAC (CUFE real)."""
+
+    __tablename__ = "documentos"
+    id = db.Column(db.Integer, primary_key=True)
+    numero = db.Column(db.Integer, unique=True, nullable=False)
+    tipo = db.Column(db.String(12), nullable=False, default="factura")
+    cuenta_id = db.Column(
+        db.Integer, db.ForeignKey("cuentas.id"), nullable=False, unique=True
+    )
+    cajero_id = db.Column(db.Integer, db.ForeignKey("operadores.id"), nullable=False)
+    receptor_ruc = db.Column(db.String(30), nullable=False)
+    receptor_dv = db.Column(db.String(3))
+    receptor_nombre = db.Column(db.String(120), nullable=False)
+    subtotal = db.Column(Dinero, nullable=False)
+    descuento_producto = db.Column(Dinero, nullable=False)
+    descuento_jubilado = db.Column(Dinero, nullable=False)
+    itbms = db.Column(Dinero, nullable=False)
+    total = db.Column(Dinero, nullable=False)
+    #: {"7": ["17.90", "1.25"], …}: base e ITBMS por tasa, como texto exacto.
+    impuestos = db.Column(db.Text, nullable=False, default="{}")
+    cufe = db.Column(db.String(80), unique=True, nullable=False)
+    estado = db.Column(db.String(12), nullable=False, default="simulado")
+    emitido_en = db.Column(db.DateTime, nullable=False, default=ahora)
+
+    cuenta = db.relationship("Cuenta")
+    cajero = db.relationship("Operador")

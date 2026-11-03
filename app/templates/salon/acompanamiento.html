@@ -1,0 +1,30 @@
+{% extends "base.html" %} {% block titulo %}Acompañamiento{% endblock %} {%
+block contenido %}
+<section class="tarjeta tarjeta-centro">
+  <h1>
+    {{ producto.descripcion }} <small>B/. {{ producto.precio | dinero }}</small>
+  </h1>
+  <p>Elige el acompañamiento:</p>
+  <div class="opciones">
+    {% for a in opciones %}
+    <form method="post" action="{{ url_for('salon.agregar', cid=comanda.id) }}">
+      {{ csrf_field() }}{{ idem_field() }}
+      <input type="hidden" name="producto" value="{{ producto.id }}" />
+      <input type="hidden" name="cuenta" value="{{ cuenta.numero }}" />
+      <input type="hidden" name="acompanamiento" value="{{ a.id }}" />
+      <button class="btn opcion" type="submit">
+        {{ a.descripcion }}{{ ' (+' ~ (a.precio | dinero) ~ ')' if a.precio else
+        '' }}
+      </button>
+    </form>
+    {% endfor %}
+  </div>
+  <p>
+    <a
+      class="btn btn-gris"
+      href="{{ url_for('salon.comanda', cid=comanda.id, cuenta=cuenta.numero, seccion=producto.seccion_id) }}"
+      >Cancelar</a
+    >
+  </p>
+</section>
+{% endblock %}

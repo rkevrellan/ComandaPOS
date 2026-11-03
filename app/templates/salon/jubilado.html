@@ -1,0 +1,40 @@
+{% extends "base.html" %} {% block titulo %}Descuento de jubilado{% endblock %}
+{% block contenido %}
+<section class="tarjeta tarjeta-centro">
+  <h1>
+    Jubilado, pensionado o tercera edad
+    <small>cuenta {{ cuenta.numero }}</small>
+  </h1>
+  <p>
+    Ley 6 de 1987: <b>{{ pct }} %</b> sobre el consumo individual de comida (los
+    productos que aplican). Una persona por cuenta; se registra su cédula o
+    carné.
+  </p>
+  <form method="post" class="form-columna" autocomplete="off">
+    {{ csrf_field() }}
+    <label for="cedula">Cédula o carné</label>
+    <input
+      id="cedula"
+      name="cedula"
+      maxlength="20"
+      value="{{ cuenta.jubilado_cedula or '' }}"
+    />
+    <label for="nombre">Nombre (opcional)</label>
+    <input
+      id="nombre"
+      name="nombre"
+      maxlength="80"
+      value="{{ cuenta.jubilado_nombre or '' }}"
+    />
+    <p class="vacio">Deja la cédula vacía para quitar el descuento.</p>
+    <div class="fila-botones">
+      <a
+        class="btn btn-gris"
+        href="{{ url_for('salon.comanda', cid=cuenta.comanda_id, cuenta=cuenta.numero) }}"
+        >Cancelar</a
+      >
+      <button class="btn btn-aceptar" type="submit">Aplicar</button>
+    </div>
+  </form>
+</section>
+{% endblock %}

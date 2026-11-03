@@ -1,0 +1,80 @@
+{% extends "base.html" %} {% block titulo %}Cocina{% endblock %} {% block
+clase_main %}pantalla-cocina{% endblock %} {% block contenido %}
+<div class="cocina-barra" data-autorecarga="{{ recarga }}">
+  <h1>Pantalla de {{ area.descripcion if area else 'cocina' }}</h1>
+  <nav class="fila-botones">
+    {% for a in areas %}
+    <a
+      class="btn {{ 'activa' if area and a.id == area.id else '' }}"
+      href="{{ url_for('cocina.tablero', area=a.id) }}"
+      >{{ a.descripcion }}</a
+    >
+    {% endfor %}
+    <a
+      class="btn btn-gris"
+      href="{{ url_for('cocina.tablero', area=area.id if area else None) }}"
+      >Refrescar</a
+    >
+    <a class="btn btn-gris" href="{{ url_for('mesas.control') }}">← Mesas</a>
+  </nav>
+</div>
+<p class="leyenda-kds">
+  <b>P</b> en proceso · <b>L</b> listo (avisa al mesero) · <b>E</b> entregado ·
+  se actualiza sola cada {{ recarga }} s
+</p>
+
+<div class="tarjetas-kds">
+  {% for t in tarjetas %} {% set c = t.comanda %}
+  <article class="kds nivel-{{ t.nivel }}">
+    <header>
+      <b>{{ 'Mesa ' ~ c.mesa.numero if c.mesa else 'Directo' }}</b>
+      <span>{{ c.mesero.nombre }}</span>
+    </header>
+    <ul>
+      {% for ln in t.lineas %}
+      <li class="kds-linea linea-estado-{{ ln.estado }}">
+        <span class="kds-cant">{{ ln.cantidad.normalize() }}</span>
+        <span class="kds-desc"
+          >{{ ln.descripcion }} {% if ln.acompanamiento %}<small
+            >+ {{ ln.acompanamiento }}</small
+          >{% endif %} {% if ln.notas %}<small class="nota"
+            >✎ {{ ln.notas }}</small
+          >{% endif %} {% if ln.para_llevar %}<small class="llevar"
+            >PARA LLEVAR</small
+          >{% endif %}
+        </span>
+        <span class="chip linea-{{ ln.estado }}">{{ ln.estado }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    <footer>
+      <span>Rec# {{ c.numero }}</span>
+      <span class="tiempo">{{ t.minutos }} min</span>
+      <div class="kds-botones">
+        {% for accion, texto in [('P', 'En proceso'), ('L', 'Listo'), ('E',
+        'Entregado')] %}
+        <form
+          method="post"
+          action="{{ url_for('cocina.marcar', cid=c.id, area_id=area.id, accion=accion) }}"
+        >
+          {{ csrf_field() }}
+          <button
+            class="btn kds-{{ accion }}"
+            type="submit"
+            title="{{ texto }}"
+            aria-label="{{ texto }}"
+          >
+            {{ accion }}
+          </button>
+        </form>
+        {% endfor %}
+      </div>
+    </footer>
+  </article>
+  {% else %}
+  <p class="vacio grande">
+    Sin pedidos pendientes en {{ area.descripcion if area else 'esta área' }}.
+  </p>
+  {% endfor %}
+</div>
+{% endblock %}

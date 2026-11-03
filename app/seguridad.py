@@ -108,6 +108,20 @@ def ip_cliente() -> str:
     return (request.remote_addr or "")[:45]
 
 
+_HASH_RELLENO: list = []
+
+
+def hash_relleno() -> str:
+    """Hash scrypt de relleno: si el usuario no existe se verifica contra este (mismo costo, A07)."""
+    if not _HASH_RELLENO:
+        from werkzeug.security import generate_password_hash
+
+        _HASH_RELLENO.append(
+            generate_password_hash("relleno-" + str(time.time()), method="scrypt")
+        )
+    return _HASH_RELLENO[0]
+
+
 # --------------------------------------------------------------------------- eventos
 _ULTIMO_EVENTO: dict = {}
 _LOCK_EVENTO = threading.Lock()

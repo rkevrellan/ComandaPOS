@@ -1,0 +1,62 @@
+{% extends "base.html" %} {% block titulo %}Comprobante {{ '%010d' % doc.numero
+}}{% endblock %} {% block contenido %}
+<section class="tarjeta tarjeta-centro">
+  {% if doc.estado == 'simulado' %}
+  <p class="aviso aviso-info">
+    Documento de prueba: sin validez fiscal hasta conectar el PAC (fase 5).
+  </p>
+  {% endif %}
+  <h1>
+    Comprobante {{ '%010d' % doc.numero }}
+    <small>{{ doc.emitido_en | fecha }}</small>
+  </h1>
+  <dl class="pares">
+    <dt>Cliente</dt>
+    <dd>
+      {{ doc.receptor_nombre }} · {{ doc.receptor_ruc }}{{ ' DV ' ~
+      doc.receptor_dv if doc.receptor_dv else '' }}
+    </dd>
+    <dt>{{ 'Mesa' if comanda.mesa else 'Pedido directo' }}</dt>
+    <dd>
+      {{ comanda.mesa.numero if comanda.mesa else comanda.numero }} · comanda {{
+      comanda.numero }} · cuenta {{ doc.cuenta.numero }}
+    </dd>
+    <dt>Subtotal</dt>
+    <dd>B/. {{ doc.subtotal | dinero }}</dd>
+    <dt>Descuentos</dt>
+    <dd>
+      B/. {{ (doc.descuento_producto + doc.descuento_jubilado) | dinero }}
+    </dd>
+    <dt>ITBMS</dt>
+    <dd>B/. {{ doc.itbms | dinero }}</dd>
+    <dt>Total</dt>
+    <dd><b>B/. {{ doc.total | dinero }}</b></dd>
+    <dt>CUFE</dt>
+    <dd><code>{{ doc.cufe }}</code></dd>
+  </dl>
+  <div class="fila-botones">
+    <a
+      class="btn btn-aceptar"
+      href="{{ url_for('salon.documento_pdf', did=doc.id) }}"
+      target="_blank"
+      rel="noopener"
+      >Imprimir comprobante (PDF)</a
+    >
+    {% if comanda.estado == 'abierta' %}
+    <a class="btn" href="{{ url_for('salon.comanda', cid=comanda.id) }}"
+      >Volver a la comanda</a
+    >
+    {% elif comanda.mesa and comanda.mesa.estado == 'pagada' %}
+    <form
+      method="post"
+      action="{{ url_for('salon.liberar', numero=comanda.mesa.numero) }}"
+    >
+      {{ csrf_field() }}<button class="btn" type="submit">
+        Liberar mesa {{ comanda.mesa.numero }}
+      </button>
+    </form>
+    {% endif %}
+    <a class="btn btn-gris" href="{{ url_for('mesas.control') }}">Mesas</a>
+  </div>
+</section>
+{% endblock %}

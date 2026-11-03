@@ -1,0 +1,62 @@
+{% extends "base.html" %} {% block titulo %}Notas fijas{% endblock %} {% block
+contenido %}
+<div class="encabezado-pagina">
+  <h1>Notas fijas</h1>
+  <a class="btn btn-gris" href="{{ url_for('mesas.control') }}">← Mesas</a>
+</div>
+<p class="vacio">
+  Son las notas predefinidas que el mesero agrega a un producto (salen impresas
+  en la comanda de cocina).
+</p>
+{% if puede_editar %}
+<form
+  method="post"
+  action="{{ url_for('catalogos.nota_nueva') }}"
+  class="fila-botones separada"
+  autocomplete="off"
+>
+  {{ csrf_field() }}
+  <input
+    name="descripcion"
+    maxlength="60"
+    placeholder="Nueva nota, por ejemplo: SIN CEBOLLA"
+    aria-label="Nueva nota"
+    required
+  />
+  <button class="btn btn-aceptar corto" type="submit">Agregar</button>
+</form>
+{% endif %}
+<table class="tabla">
+  <thead>
+    <tr>
+      <th>Código</th>
+      <th>Descripción</th>
+      <th>Estado</th>
+      {% if puede_editar %}
+      <th></th>
+      {% endif %}
+    </tr>
+  </thead>
+  <tbody>
+    {% for n in notas %}
+    <tr class="{{ '' if n.activa else 'inactiva' }}">
+      <td>{{ n.codigo }}</td>
+      <td>{{ n.descripcion }}</td>
+      <td>{{ 'Activa' if n.activa else 'Inactiva' }}</td>
+      {% if puede_editar %}
+      <td>
+        <form
+          method="post"
+          action="{{ url_for('catalogos.nota_estado', nid=n.id) }}"
+        >
+          {{ csrf_field() }}<button class="btn btn-mini" type="submit">
+            {{ 'Desactivar' if n.activa else 'Activar' }}
+          </button>
+        </form>
+      </td>
+      {% endif %}
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

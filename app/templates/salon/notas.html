@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block titulo %}Notas del producto{% endblock %}
+{% block contenido %}
+<section class="tarjeta tarjeta-centro">
+  <h1>Notas del producto <small>{{ linea.descripcion }}</small></h1>
+  {% set actuales = linea.notas.split('; ') if linea.notas else [] %}
+  <form method="post" class="form-notas">
+    {{ csrf_field() }}
+    <fieldset>
+      <legend>Notas predefinidas</legend>
+      <div class="opciones">
+        {% for n in fijas %}
+        <label class="opcion-check">
+          <input type="checkbox" name="nota" value="{{ n.id }}" {{ 'checked' if n.descripcion in actuales else '' }}>
+          <span>{{ n.descripcion }}</span>
+        </label>
+        {% endfor %}
+      </div>
+    </fieldset>
+    <label for="libre">Notas especiales (máx. 140 caracteres)</label>
+    <input id="libre" name="libre" maxlength="140" autocomplete="off"
+           value="{{ actuales | reject('in', fijas | map(attribute='descripcion') | list) | join('; ') }}">
+    <div class="fila-botones">
+      <a class="btn btn-gris" href="{{ url_for('salon.comanda', cid=linea.cuenta.comanda_id, cuenta=linea.cuenta.numero, linea=linea.id) }}">Cancelar</a>
+      <button class="btn btn-aceptar" type="submit">Grabar notas</button>
+    </div>
+  </form>
+</section>
+{% endblock %}

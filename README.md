@@ -1,4 +1,4 @@
-# ComandaPOS — Fase 1 (base)
+# ComandaPOS — Fase 2 (salón, cocina y caja)
 **«Del pedido a la factura, sin perder una comanda.»**
 
 Punto de venta para restaurantes de servicio a la mesa en Panamá: mesa → comanda → cocina → cobro →
@@ -7,7 +7,32 @@ empaqueta como programa de escritorio para Windows (`ComandaPOS.exe` + instalado
 
 Programación: **Kevin Rellán** · Especificación completa: [`docs/PROMPT_ComandaPOS.md`](docs/PROMPT_ComandaPOS.md)
 
-## Qué trae la fase 1
+## Qué funciona: el ciclo completo
+**mesa → comanda → cocina → pre-cuenta → cobro → comprobante → liberar mesa → cierre de turno**
+
+| Pantalla | Qué hace |
+|---|---|
+| **Mapa de mesas** | Las mesas se tocan. Cada mesa ocupada muestra el mesero, los minutos y el total. Panel «Pedidos listos» con botón «Entregado». Barra: Caja, Notas fijas, Clientes, Cocina y Pedidos directos (cobro rápido). |
+| **Abrir mesa** | Se elige el número de personas (1 a 12). El supervisor puede poner una mesa fuera de servicio y habilitarla. |
+| **Comanda** | Secciones del menú, productos con precio, acompañamiento obligatorio cuando aplica, cuentas separadas (1..n), cantidad +/−, notas fijas y libres, para llevar, borrar (solo lo no enviado), descuento %, anular con autorización de supervisor y motivo, pasar una línea a otra cuenta, «Enviar pedidos», jubilado %, pre-cuenta, mover mesa, otro mesero. Totales SB-TOT, DES-PRD, DES-JUB, ITBMS y TOTAL. |
+| **Cocina (KDS)** | Una pantalla por área (Cocina, Frente): tarjetas por mesa con tiempo (verde → amarillo → rojo) y botones **P** (en proceso), **L** (listo, avisa al mesero) y **E** (entregado). Se actualiza sola. |
+| **Pre-cuenta** | PDF de ticket de 80 mm con «PRE-CUENTA — NO ES FACTURA». |
+| **Cobro** | Multipago (efectivo, Visa, Mastercard, Clave, Yappy y crédito), billetes rápidos, vuelto en vivo, cliente contribuyente o consumidor final con nombre, crédito con límite. |
+| **Comprobante** | PDF de 80 mm con estructura de CAFE: emisor, receptor, detalle con ITBMS por línea, bases por tasa, formas de pago, vuelto, código y **QR**. Marcado «SIN VALIDEZ FISCAL» hasta la fase 5 (PAC). |
+| **Caja** | Abrir turno con fondo, ventas por forma de pago, comprobantes del turno con reimpresión, corte Z con arqueo y justificación de diferencias. |
+| **Notas fijas y clientes** | Listado y alta (las notas las crea un supervisor; el crédito lo asigna un supervisor). |
+
+La demostración arranca con el **turno 1 abierto** (cajera Marta, fondo B/. 50) para poder cobrar de inmediato.
+
+### Recorrido de prueba
+1. Entra como `ana` (PIN `246810`), toca la mesa 12, elige 3 personas.
+2. Toca productos (Bebidas, Almuerzo…). Al tasajo ponle una nota. Pulsa **Enviar pedidos**.
+3. En otra ventana entra como `luis`, ve a **Cocina** y pulsa **L** (listo). A Ana le aparece en «Pedidos listos».
+4. Ana pulsa **Pre-cuenta** e imprime el PDF.
+5. Entra como `marta` (cajera), toca la mesa 12 → **Cobrar** → mezcla Visa y efectivo → **EXE**. Imprime el comprobante.
+6. **Liberar mesa**. En **Caja** verás la venta y podrás cerrar el turno.
+
+## Base (fase 1)
 | Parte | Detalle |
 |---|---|
 | **Núcleo** | `create_app()`, carpeta de datos fuera del programa (`%PROGRAMDATA%\ComandaPOS` en Windows), SQLite en modo WAL, clave secreta por instalación. |
@@ -19,7 +44,7 @@ Programación: **Kevin Rellán** · Especificación completa: [`docs/PROMPT_Coma
 | **Auditoría encadenada** | Cada registro queda sellado con HMAC y encadenado al anterior, más un ancla fuera de la base: editar, borrar o truncar la bitácora se detecta. |
 | **Pantallas** | Control de acceso, control de ocupación de mesas por sala, consola del programador (estado, secuencias, verificación de la auditoría). |
 | **Datos de prueba** | «Restaurante El Fogón (demo)»: 38 mesas en 3 salas, 70 productos panameños, acompañamientos, notas fijas y clientes ficticios. |
-| **Pruebas** | 95 pruebas automáticas (`pytest`). |
+| **Pruebas** | 128 pruebas automáticas (`pytest`), incluido el ciclo completo de una mesa. |
 
 ## Requisitos
 - **Python 3.11 a 3.13** (en Windows, desde python.org marcando «Add python.exe to PATH»).
@@ -72,14 +97,16 @@ app/
   config.py          nombre, versión, roles, tiempos de inactividad, carpeta de datos
   models.py          modelo de datos (Dinero y Cantidad en enteros)
   seguridad.py       @publica / @rol_requerido, limitadores, PIN y contraseñas, destino_seguro
-  services/          calculos (RN-01..06), secuencias (RN-04), auditoria, configuracion
-  auth/ mesas/ dev/  pantallas
+  services/          calculos (RN-01..06), secuencias (RN-04), pedidos (salón), caja (cobro y turnos),
+                     autorizacion, pdf (pre-cuenta y comprobante), auditoria, configuracion
+  auth/ mesas/ salon/ cocina/ caja/ catalogos/ dev/   pantallas
   templates/ static/ interfaz táctil (sin JavaScript en línea)
-tests/               95 pruebas
+tests/               128 pruebas
 docs/                SEGURIDAD, SUPOSICIONES, PENDIENTES y el prompt maestro
 ```
 
 ## Próximas fases
-2 Salón (comanda completa) · 3 Cocina e impresión · 4 Caja · 5 Facturación electrónica (PAC y CAFE en PDF) ·
-6 Administración, inventario y reportes · 7 Escritorio (.exe e instalador) · 8 Revisión de seguridad independiente.
+3 Impresión térmica ESC/POS · 4 Corte X y reportes de caja · 5 Facturación electrónica real (PAC, CUFE, contingencia,
+notas de crédito) · 6 Administración del menú, inventario y reportes · 7 Escritorio (.exe e instalador) ·
+8 Revisión de seguridad independiente.
 Detalle en `docs/PENDIENTES.md`.

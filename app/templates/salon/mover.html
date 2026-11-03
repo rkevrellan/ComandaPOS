@@ -1,0 +1,29 @@
+{% extends "base.html" %} {% block titulo %}Mover mesa{% endblock %} {% block
+contenido %}
+<section class="tarjeta tarjeta-centro">
+  <h1>
+    Mover mesa
+    <small
+      >comanda {{ comanda.numero }} · mesa actual {{ comanda.mesa.numero
+      }}</small
+    >
+  </h1>
+  <p>Elige la mesa nueva (solo se muestran las disponibles):</p>
+  <form method="post" class="teclado-puestos">
+    {{ csrf_field() }} {% for m in libres %}
+    <button class="btn puesto" type="submit" name="mesa" value="{{ m.numero }}">
+      {{ m.numero }}<small>{{ m.sala.nombre }}</small>
+    </button>
+    {% else %}
+    <p class="vacio">No hay mesas disponibles.</p>
+    {% endfor %}
+  </form>
+  <p>
+    <a
+      class="btn btn-gris"
+      href="{{ url_for('salon.comanda', cid=comanda.id) }}"
+      >Cancelar</a
+    >
+  </p>
+</section>
+{% endblock %}

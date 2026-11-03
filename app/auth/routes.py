@@ -20,7 +20,7 @@ from flask import (
     url_for,
 )
 from flask_login import current_user, login_user, logout_user
-from werkzeug.security import check_password_hash, generate_password_hash
+from werkzeug.security import check_password_hash
 
 from ..config import ROLES_CON_PIN
 from ..extensions import db
@@ -34,6 +34,7 @@ from ..seguridad import (
     con_sesion,
     destino_seguro,
     evento_seguridad,
+    hash_relleno,
     ip_cliente,
     publica,
 )
@@ -41,8 +42,6 @@ from ..services.auditoria import auditar, auditar_ya
 
 bp = Blueprint("auth", __name__)
 
-#: Hash de relleno: cuando el usuario no existe se verifica contra este, con el mismo costo.
-_HASH_RELLENO = generate_password_hash("relleno-" + str(time.time()), method="scrypt")
 
 
 def _plantilla(codigo: int = 200, usuario: str = ""):
@@ -82,7 +81,7 @@ def acceso():
     if operador is not None:
         valida = operador.verificar_clave(clave)
     else:
-        check_password_hash(_HASH_RELLENO, clave or "x")
+        check_password_hash(hash_relleno(), clave or "x")
         valida = False
 
     if not (valida and operador.activo):

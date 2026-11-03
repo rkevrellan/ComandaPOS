@@ -6,13 +6,13 @@ from flask import Blueprint, redirect, render_template, request, url_for
 from flask_login import current_user
 
 from ..extensions import db
-from ..models import ESTADOS_MESA, Mesa, Sala
+from ..models import ESTADOS_MESA, Comanda, Cuenta, LineaPedido, Mesa, Sala, ahora
 from ..seguridad import con_sesion, publica
-from ..services import secuencias
+from ..services import pedidos, secuencias
 
 bp = Blueprint("mesas", __name__)
 
-#: Texto y clase CSS de cada estado (el color nunca va solo: también va el texto).
+#: Texto de cada estado (el color nunca va solo: también va el texto).
 LEYENDA = {
     "disponible": "Disponible",
     "ocupada": "Ocupada",
@@ -47,6 +47,33 @@ def control():
     conteo = {e: 0 for e in ESTADOS_MESA}
     for m in Mesa.query.all():
         conteo[m.estado] += 1
+
+    momento = ahora()
+    abiertas = Comanda.query.filter_by(estado="abierta").all()
+    info = {}
+    for c in abiertas:
+        if c.mesa_id is not None:
+            info[c.mesa_id] = {
+                "mesero": c.mesero.iniciales,
+                "propia": pedidos.puede_operar(current_user, c),
+                "total": pedidos.total_comanda(c),
+                "minutos": int((momento - c.abierta_en).total_seconds() // 60),
+            }
+    rapidas = [
+        c
+        for c in abiertas
+        if c.tipo == "rapido" and pedidos.puede_operar(current_user, c)
+    ]
+
+    consulta = (
+        LineaPedido.query.join(Cuenta)
+        .join(Comanda)
+        .filter(LineaPedido.estado == "PRE", Comanda.estado == "abierta")
+    )
+    if not current_user.puede("cajero"):
+        consulta = consulta.filter(Comanda.mesero_id == current_user.id)
+    listos = consulta.order_by(LineaPedido.listo_en).limit(30).all()
+
     return render_template(
         "mesas/control.html",
         salas=salas,
@@ -55,5 +82,8 @@ def control():
         leyenda=LEYENDA,
         corto=CORTO,
         conteo=conteo,
+        info=info,
+        rapidas=rapidas,
+        listos=listos,
         ultima_comanda=secuencias.actual("comanda"),
     )

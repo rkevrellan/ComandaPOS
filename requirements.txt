@@ -8,4 +8,6 @@ Flask-SQLAlchemy>=3.1.1
 SQLAlchemy>=2.0.30
 Flask-Login>=0.6.3
 waitress>=3.0.1
+# PDF de pre-cuenta y comprobante (con código QR incluido, sin dependencias extra)
+reportlab>=4.2
 pytest>=8.0

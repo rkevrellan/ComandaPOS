@@ -28,7 +28,7 @@ from app.models import (
 )
 from app.seguridad import CLAVE_DEMO, CUENTAS_DEMO, PIN_DEMO
 from app.config import ROLES_CON_PIN
-from app.services import auditoria, configuracion, secuencias
+from app.services import auditoria, caja, configuracion, secuencias
 
 CARGOS = {
     "operador": "Mesero",
@@ -345,6 +345,10 @@ def poblar() -> bool:
     configuracion.asegurar_valores()
     secuencias.asegurar_secuencias()
     auditoria.auditar("datos_demo", "Se crearon los datos de demostración")
+    db.session.commit()
+    # Turno de caja abierto para que la demostración permita cobrar desde el primer momento.
+    cajera = Operador.query.filter_by(usuario="marta").one()
+    caja.abrir_turno(cajera, "50.00")
     db.session.commit()
     auditoria.sellar_pendientes()
     return True
