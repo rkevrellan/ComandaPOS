@@ -9,3 +9,4 @@ dist/
 datos/
 *.log
 SHA256SUMS.txt
+datos-*/

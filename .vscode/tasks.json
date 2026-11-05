@@ -1,0 +1,27 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Instalar dependencias",
+      "type": "shell",
+      "command": "${command:python.interpreterPath}",
+      "args": ["-m", "pip", "install", "-r", "requirements.txt"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Verificar dependencias",
+      "type": "shell",
+      "command": "${command:python.interpreterPath}",
+      "args": ["run.py", "--verificar"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Reiniciar datos de demostración",
+      "type": "shell",
+      "command": "${command:python.interpreterPath}",
+      "args": ["seed.py", "--reiniciar"],
+      "options": { "env": { "COMANDAPOS_PRODUCCION": "0" } },
+      "problemMatcher": []
+    }
+  ]
+}

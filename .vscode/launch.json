@@ -2,10 +2,43 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "ComandaPOS (servidor)",
+      "name": "ComandaPOS (demostración)",
       "type": "debugpy",
       "request": "launch",
       "program": "${workspaceFolder}/run.py",
+      "env": { "COMANDAPOS_PRODUCCION": "0" },
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "ComandaPOS (ventana de escritorio)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/escritorio.py",
+      "env": { "COMANDAPOS_PRODUCCION": "0" },
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "ComandaPOS (red local con HTTPS)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/run.py",
+      "args": ["--red"],
+      "env": { "COMANDAPOS_PRODUCCION": "0" },
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "ComandaPOS (producción de prueba, base aparte)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/run.py",
+      "args": ["--puerto", "5002"],
+      "env": {
+        "COMANDAPOS_PRODUCCION": "1",
+        "COMANDAPOS_DATA": "${workspaceFolder}/datos-produccion"
+      },
       "console": "integratedTerminal",
       "justMyCode": true
     },
@@ -15,6 +48,7 @@
       "request": "launch",
       "program": "${workspaceFolder}/run.py",
       "args": ["--dev", "--puerto", "5001"],
+      "env": { "COMANDAPOS_PRODUCCION": "0" },
       "console": "integratedTerminal",
       "justMyCode": true
     },
