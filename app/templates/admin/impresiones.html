@@ -1,0 +1,53 @@
+{% extends "base.html" %} {% block titulo %}Impresiones{% endblock %} {% block
+contenido %}
+<div class="encabezado-pagina">
+  <h1>Impresiones</h1>
+  <div class="fila-botones">
+    <a
+      class="btn corto"
+      href="{{ url_for('admin.catalogo', clave='impresoras') }}"
+      >Impresoras</a
+    >
+    <a class="btn btn-gris" href="{{ url_for('admin.inicio') }}"
+      >← Administración</a
+    >
+  </div>
+</div>
+<section class="tarjeta">
+  <h2>Página de prueba</h2>
+  <div class="fila-botones">
+    {% for imp in impresoras %}
+    <form
+      method="post"
+      action="{{ url_for('admin.prueba_impresora', iid=imp.id) }}"
+    >
+      {{ csrf_field() }}<button class="btn corto" type="submit">
+        {{ imp.nombre }}
+      </button>
+    </form>
+    {% else %}
+    <p class="vacio">No hay impresoras configuradas.</p>
+    {% endfor %}
+  </div>
+</section>
+<h2 class="separada">Últimos trabajos</h2>
+<div class="trabajos">
+  {% for t in trabajos %}
+  <article class="trabajo estado-trabajo-{{ t.estado }}">
+    <header>
+      <b>{{ t.descripcion }}</b
+      ><span
+        >{{ t.impresora.nombre if t.impresora else '—' }} · {{ t.estado }} · {{
+        t.creado | fecha }}</span
+      >
+    </header>
+    {% if t.error %}
+    <p class="aviso aviso-error">{{ t.error }}</p>
+    {% endif %}
+    <pre class="ticket">{{ vista(t.contenido) }}</pre>
+  </article>
+  {% else %}
+  <p class="vacio">Todavía no hay trabajos de impresión.</p>
+  {% endfor %}
+</div>
+{% endblock %}

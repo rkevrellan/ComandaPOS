@@ -198,6 +198,10 @@ ACCESO = Limitador(5, 600)
 ACCESO_TERMINAL = Limitador(30, 600)
 #: 5 autorizaciones de supervisor fallidas por terminal cada 10 minutos (fase 2: anulaciones).
 AUTORIZACION = Limitador(5, 600)
+#: 5 códigos de verificación en dos pasos fallidos por cuenta cada 10 minutos.
+DOS_PASOS = Limitador(5, 600)
+#: 5 claves actuales incorrectas por cuenta cada 10 minutos al cambiar la propia clave.
+REAUTENTICAR = Limitador(5, 600)
 
 
 # --------------------------------------------------------------------------- PIN y contraseñas

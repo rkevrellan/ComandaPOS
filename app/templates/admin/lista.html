@@ -1,0 +1,84 @@
+{% extends "base.html" %} {% block titulo %}{{ cat.titulo }}{% endblock %} {%
+block contenido %}
+<div class="encabezado-pagina">
+  <h1>{{ cat.titulo }}</h1>
+  <div class="fila-botones">
+    <a
+      class="btn btn-aceptar corto"
+      href="{{ url_for('admin.nuevo', clave=cat.clave) }}"
+      >{{ cat.nuevo }} {{ cat.singular }}</a
+    >
+    <a class="btn btn-gris" href="{{ url_for('admin.inicio') }}"
+      >← Administración</a
+    >
+  </div>
+</div>
+{% if cat.ayuda %}
+<p class="vacio">{{ cat.ayuda }}</p>
+{% endif %} {% if cat.busqueda %}
+<form method="get" class="fila-botones">
+  <input
+    name="q"
+    value="{{ q }}"
+    maxlength="40"
+    placeholder="Buscar"
+    aria-label="Buscar"
+  />
+  <button class="btn corto" type="submit">Buscar</button>
+</form>
+{% endif %}
+<table class="tabla">
+  <thead>
+    <tr>
+      {% for _a, etiqueta in cat.columnas %}
+      <th>{{ etiqueta }}</th>
+      {% endfor %}
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in registros %}
+    <tr
+      class="{{ 'inactiva' if cat.activo and not cat.valor(r, cat.activo) else '' }}"
+    >
+      {% for atributo, _e in cat.columnas %} {% set v = cat.valor(r, atributo)
+      %}
+      <td>
+        {% if v is sameas true %}Sí{% elif v is sameas false %}No{% elif v is
+        none %}—{% elif atributo == 'condicion' %}{{ condiciones.get(v, v) }}{%
+        elif atributo == 'color' %}<span
+          class="muestra-color"
+          data-color="{{ v }}"
+          >{{ v }}</span
+        >{% else %}{{ v.normalize() if v.__class__.__name__ == 'Decimal' and
+        atributo in ('existencia', 'minimo') else v }}{% endif %}
+      </td>
+      {% endfor %}
+      <td class="acciones-fila">
+        <a
+          class="enlace"
+          href="{{ url_for('admin.editar', clave=cat.clave, oid=r.id) }}"
+          >Editar</a
+        >
+        {% if cat.activo %}
+        <form
+          method="post"
+          action="{{ url_for('admin.estado', clave=cat.clave, oid=r.id) }}"
+        >
+          {{ csrf_field() }}<button class="enlace" type="submit">
+            {{ 'Inactivar' if cat.valor(r, cat.activo) else 'Activar' }}
+          </button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% else %}
+    <tr>
+      <td colspan="{{ cat.columnas | length + 1 }}" class="vacio">
+        Sin registros.
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

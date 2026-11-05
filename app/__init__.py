@@ -55,6 +55,12 @@ CSP = (
 )
 
 
+def _nombre_forma(forma: str) -> str:
+    from .models import FORMAS_PAGO
+
+    return FORMAS_PAGO.get(forma, forma)
+
+
 def _csrf_token() -> str:
     if "_csrf" not in session:
         session["_csrf"] = secrets.token_urlsafe(32)
@@ -144,6 +150,9 @@ def create_app(config: dict | None = None) -> Flask:
 
     with app.app_context():
         db.create_all()
+        from .migracion import migrar
+
+        migrar(app)
         from .services import auditoria, configuracion, secuencias
 
         secuencias.asegurar_secuencias()
@@ -160,6 +169,9 @@ def _registrar_blueprints(app: Flask) -> None:
     from .dev.routes import bp as dev_bp
     from .mesas.routes import bp as mesas_bp
     from .salon.routes import bp as salon_bp
+    from .admin.routes import bp as admin_bp
+    from .cuenta.routes import bp as cuenta_bp
+    from .reportes.routes import bp as reportes_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(mesas_bp)
@@ -167,6 +179,9 @@ def _registrar_blueprints(app: Flask) -> None:
     app.register_blueprint(cocina_bp)
     app.register_blueprint(caja_bp)
     app.register_blueprint(catalogos_bp)
+    app.register_blueprint(admin_bp)
+    app.register_blueprint(cuenta_bp)
+    app.register_blueprint(reportes_bp)
     app.register_blueprint(dev_bp, url_prefix="/dev")
 
     from .seguridad import publica
@@ -174,7 +189,7 @@ def _registrar_blueprints(app: Flask) -> None:
     @app.get("/salud")
     @publica
     def salud():
-        return jsonify({"ok": True, "version": VERSION})
+        return jsonify({"ok": True, "app": NOMBRE, "version": VERSION})
 
 
 def _vigilar_sesion(app: Flask):
@@ -212,13 +227,68 @@ def _vigilar_sesion(app: Flask):
     return None
 
 
+def _terminal_permitida(ip: str | None) -> bool:
+    """Red local: además de este equipo, solo las IP o redes de «red.terminales» (vacío = solo este)."""
+    import ipaddress
+
+    try:
+        direccion = ipaddress.ip_address((ip or "").split("%")[0])
+    except ValueError:
+        return False
+    if direccion.is_loopback:
+        return True
+    from .services.configuracion import obtener
+
+    for red in (p.strip() for p in obtener("red.terminales").split(",") if p.strip()):
+        try:
+            if direccion in ipaddress.ip_network(red, strict=False):
+                return True
+        except ValueError:
+            continue
+    return False
+
+
+#: Lo único que puede usar un administrador sin 2FA fuera de la demostración: activarla o salir.
+_PERMITIDO_SIN_2FA = {
+    "cuenta.inicio",
+    "cuenta.activar_2fa",
+    "auth.salir",
+    "static",
+    "salud",
+}
+
+
+def _exigir_2fa(app: Flask):
+    if not current_user.is_authenticated or app.config["DEMO"]:
+        return None
+    if (
+        current_user.rol in ("administrador", "programador")
+        and not current_user.tiene_2fa
+        and request.endpoint not in _PERMITIDO_SIN_2FA
+    ):
+        flash(
+            "Tu nivel exige la verificación en dos pasos. Actívala para continuar.",
+            "error",
+        )
+        return redirect(url_for("cuenta.inicio"))
+    return None
+
+
 def _peticiones(app: Flask) -> None:
     @app.before_request
     def antes():
         g.rid = secrets.token_hex(5)
         if request.path.startswith("/static/"):
             return None
+        if not _terminal_permitida(request.remote_addr):
+            from .seguridad import evento_seguridad
+
+            evento_seguridad("terminal_no_permitida", request.remote_addr or "")
+            abort(403)
         respuesta = _vigilar_sesion(app)
+        if respuesta is not None:
+            return respuesta
+        respuesta = _exigir_2fa(app)
         if respuesta is not None:
             return respuesta
         if request.method in METODOS_CON_EFECTO and app.config.get("CSRF_ENABLED"):
@@ -359,11 +429,12 @@ def _plantillas(app: Flask) -> None:
         NOMBRE_ROL=NOMBRE_ROL,
         csrf_token=_csrf_token,
         csrf_field=lambda: Markup(
-            '<input type="hidden" name="csrf_token" value="{}">'.format(_csrf_token())
-        ),
+            '<input type="hidden" name="csrf_token" value="{}">'
+        ).format(_csrf_token()),  # Markup.format escapa el valor
+        formas_pago_nombre=_nombre_forma,
         # RN-05: clave de idempotencia por formulario (un doble toque no repite la acción).
-        idem_field=lambda: Markup(
-            '<input type="hidden" name="idem" value="{}">'.format(secrets.token_hex(16))
+        idem_field=lambda: Markup('<input type="hidden" name="idem" value="{}">').format(
+            secrets.token_hex(16)
         ),
     )
 

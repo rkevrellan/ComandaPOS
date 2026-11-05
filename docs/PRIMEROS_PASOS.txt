@@ -1,0 +1,30 @@
+﻿ComandaPOS 1.0 - Primeros pasos
+================================
+
+ComandaPOS quedó instalado. Abre "ComandaPOS" desde el escritorio para probarlo con los
+datos de demostración (usuario admin, contraseña comandapos123; mesera ana, PIN 246810).
+En la demostración los documentos dicen "SIN VALIDEZ FISCAL".
+
+ANTES DE VENDER DE VERDAD
+1. Menú Inicio > ComandaPOS > "Cambiar credenciales de prueba". Anota las nuevas.
+2. Variable de entorno del sistema COMANDAPOS_PRODUCCION = 1 (Configuración avanzada del
+   sistema > Variables de entorno) y reinicia ComandaPOS.
+3. Entra como administrador: el sistema te pedirá activar la verificación en dos pasos
+   (Google Authenticator, Microsoft Authenticator u otra). Guarda los códigos de recuperación.
+4. Administración > Configuración: razón social, RUC, DV, dirección, sucursal, punto de
+   facturación, tipo de establecimiento (descuento de jubilado) y folios comprados.
+5. Facturación electrónica: "PAC por HTTP", la URL https del PAC contratado y su credencial
+   (se guarda en el Administrador de credenciales de Windows). Lee docs\FISCAL.md.
+6. Administración > Impresoras: la de caja y una por área de cocina. Usa "Página de prueba".
+7. Carga tu menú (Productos, Secciones, Acompañamientos) y tus mesas.
+8. Respaldo diario de C:\ProgramData\ComandaPOS fuera del equipo.
+
+VARIAS PC
+- PC de caja: "ComandaPOS (servidor de red local)". Si se instaló la regla de firewall,
+  solo se permite en redes privadas.
+- Configuración > Terminales permitidas: IP de las otras PC o la red (ej. 192.168.1.0/24).
+- Terminales: ComandaPOS.exe --servidor http://IP-DE-CAJA:5000   (cocina: agrega --cocina)
+
+AYUDA
+docs\MANUAL.md (uso por puesto) - docs\SEGURIDAD.md - docs\FISCAL.md
+Los datos NO se borran al desinstalar: los comprobantes fiscales deben conservarse.

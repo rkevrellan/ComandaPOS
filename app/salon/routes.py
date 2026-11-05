@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from functools import wraps
 
 from flask import (
@@ -26,13 +27,14 @@ from ..models import (
     Documento,
     LineaPedido,
     Mesa,
+    NotaCredito,
     NotaFija,
     Operador,
     Producto,
     Seccion,
 )
 from ..seguridad import con_sesion, desde, ip_cliente, rol_requerido
-from ..services import caja, pdf, pedidos
+from ..services import caja, configuracion, fiscal, impresion, pdf, pedidos
 from ..services.autorizacion import autorizar
 from ..services.calculos import ReglaNegocioError
 
@@ -281,8 +283,9 @@ def enviar(cid: int):
     c = _comanda(cid)
     cuenta = request.form.get("cuenta", 1)
     if pedidos.tomar_idempotencia(request.form.get("idem"), "enviar"):
-        n = pedidos.enviar(c)
+        n = pedidos.enviar(c, current_user)
         db.session.commit()
+        _imprimir()
         flash(
             (
                 f"Se enviaron {n} producto(s) a cocina y frente."
@@ -338,6 +341,7 @@ def anular(lid: int):
             autorizador = _autorizador("supervisor")
             pedidos.anular(linea, current_user, autorizador, request.form.get("motivo"))
             db.session.commit()
+            _imprimir()
         except ReglaNegocioError as e:
             db.session.rollback()
             flash(str(e), "error")
@@ -510,11 +514,23 @@ def cobrar(cuenta_id: int):
             )
         try:
             doc = caja.cobrar(cuenta, request.form, current_user)
-            db.session.commit()
+            db.session.commit()  # la venta queda firme ANTES de hablar con el PAC
         except ReglaNegocioError as e:
             db.session.rollback()
             flash(str(e), "error")
             return _pantalla_cobro(cuenta, request.form), 422
+        estado = fiscal.autorizar(doc, url_de(doc))
+        db.session.commit()
+        if estado in ("autorizado", "simulado"):
+            fiscal.reenviar_pendientes(
+                url_de, limite=3
+            )  # aprovecha que el PAC responde
+        elif estado == "contingencia":
+            flash(
+                "El PAC no respondió: el comprobante quedó en contingencia y se reenviará.",
+                "info",
+            )
+        _ticket_y_gaveta(doc)
         return redirect(url_for("salon.documento", did=doc.id, imprimir=1))
     if cuenta.estado == "pagada":
         doc = Documento.query.filter_by(cuenta_id=cuenta.id).first()
@@ -591,7 +607,10 @@ def documento(did: int):
         "salon/documento.html",
         doc=doc,
         comanda=comanda,
-        imprimir=request.args.get("imprimir") == "1",
+        items=fiscal.items(doc),
+        pagos=fiscal.pagos(doc),
+        leyenda=fiscal.leyenda(doc),
+        es_cajero=current_user.puede("cajero"),
     )
 
 
@@ -600,11 +619,172 @@ def documento(did: int):
 def documento_pdf(did: int):
     doc = db.get_or_404(Documento, did)
     _comanda(doc.cuenta.comanda_id)
-    url = url_for("salon.documento", did=doc.id, _external=True)
+    return _pdf_documento(doc, f"comprobante-{doc.numero:010d}")
+
+
+@bp.post("/documento/<int:did>/reintentar")
+@rol_requerido(*desde("cajero"))
+def reintentar(did: int):
+    doc = db.get_or_404(Documento, did)
+    if doc.estado not in fiscal.ESTADOS_PENDIENTES:
+        flash("Ese comprobante no está pendiente.", "info")
+    else:
+        estado = fiscal.autorizar(doc, url_de(doc))
+        db.session.commit()
+        flash(
+            (
+                "Comprobante autorizado."
+                if estado in ("autorizado", "simulado")
+                else f"Sigue sin autorizar: {doc.mensaje}"
+            ),
+            "ok" if estado != "contingencia" else "error",
+        )
+    return redirect(url_for("salon.documento", did=doc.id))
+
+
+@bp.route("/documento/<int:did>/nota-credito", methods=["GET", "POST"])
+@rol_requerido(*desde("cajero"))
+def nota_credito(did: int):
+    doc = db.get_or_404(Documento, did)
+    items = fiscal.items(doc)
+    ya = caja.acreditado_por_item(doc)
+    restantes = [
+        Decimal(it["cantidad"]) - ya.get(i, Decimal("0")) for i, it in enumerate(items)
+    ]
+    if request.method == "POST":
+        try:
+            cantidades = {}
+            for i in range(len(items)):
+                valor = (request.form.get(f"cant_{i}") or "").strip()
+                if valor and valor not in ("0", "0.0", "0.000"):
+                    cantidades[i] = valor
+            autorizador = _autorizador("supervisor")
+            nc = caja.nota_credito(
+                doc,
+                cantidades,
+                request.form.get("motivo"),
+                request.form.get("forma") or "efectivo",
+                current_user,
+                autorizador,
+            )
+            db.session.commit()
+        except ReglaNegocioError as e:
+            db.session.rollback()
+            flash(str(e), "error")
+            return (
+                render_template(
+                    "salon/nota_credito.html",
+                    doc=doc,
+                    items=items,
+                    restantes=restantes,
+                    formas=FORMAS_PAGO,
+                    previo=request.form,
+                ),
+                422,
+            )
+        fiscal.autorizar(nc, url_de(nc))
+        db.session.commit()
+        if nc.forma_devolucion == "efectivo":
+            _gaveta()
+        flash(f"Nota de crédito {nc.numero} emitida por B/. {nc.total:,.2f}.", "ok")
+        return redirect(url_for("salon.ver_nota", nid=nc.id))
+    return render_template(
+        "salon/nota_credito.html",
+        doc=doc,
+        items=items,
+        restantes=restantes,
+        formas=FORMAS_PAGO,
+        previo={},
+    )
+
+
+@bp.get("/nota-credito/<int:nid>")
+@rol_requerido(*desde("cajero"))
+def ver_nota(nid: int):
+    nc = db.get_or_404(NotaCredito, nid)
+    return render_template(
+        "salon/ver_nota.html", nc=nc, items=fiscal.items(nc), leyenda=fiscal.leyenda(nc)
+    )
+
+
+@bp.get("/nota-credito/<int:nid>.pdf")
+@rol_requerido(*desde("cajero"))
+def nota_pdf(nid: int):
+    nc = db.get_or_404(NotaCredito, nid)
+    return _pdf_documento(nc, f"nota-credito-{nc.numero:010d}")
+
+
+@bp.post("/nota-credito/<int:nid>/reintentar")
+@rol_requerido(*desde("cajero"))
+def reintentar_nota(nid: int):
+    nc = db.get_or_404(NotaCredito, nid)
+    if nc.estado in fiscal.ESTADOS_PENDIENTES:
+        fiscal.autorizar(nc, url_de(nc))
+        db.session.commit()
+    return redirect(url_for("salon.ver_nota", nid=nc.id))
+
+
+# --------------------------------------------------------------------------- ayudas de documentos
+def url_de(doc) -> str:
+    """Dirección de consulta del documento (va en el QR de la demostración)."""
+    if isinstance(doc, NotaCredito):
+        return url_for("salon.ver_nota", nid=doc.id, _external=True)
+    return url_for("salon.documento", did=doc.id, _external=True)
+
+
+def _pdf_documento(doc, nombre: str):
+    carta = request.args.get("formato") == "carta"
+    datos = (pdf.comprobante_carta_pdf if carta else pdf.comprobante_pdf)(
+        doc, url_de(doc)
+    )
     return Response(
-        pdf.comprobante_pdf(doc, url),
+        datos,
         mimetype="application/pdf",
         headers={
-            "Content-Disposition": f'inline; filename="comprobante-{doc.numero:010d}.pdf"'
+            "Content-Disposition": f'inline; filename="{nombre}{"-carta" if carta else ""}.pdf"'
         },
     )
+
+
+def _imprimir() -> None:
+    try:
+        impresion.procesar_pendientes()
+    except (
+        Exception
+    ):  # pragma: no cover - imprimir nunca tumba la venta; queda en la cola
+        db.session.rollback()
+
+
+def _gaveta() -> None:
+    caja_imp = impresion.impresora_de_caja()
+    if caja_imp is not None and configuracion.obtener("impresion.abrir_gaveta") == "1":
+        impresion.encolar(
+            caja_imp,
+            "Apertura de gaveta",
+            impresion.Ticket().gaveta().bytes(cortar=False),
+        )
+        db.session.commit()
+        _imprimir()
+
+
+def _ticket_y_gaveta(doc: Documento) -> None:
+    caja_imp = impresion.impresora_de_caja()
+    if caja_imp is None:
+        return
+    if configuracion.obtener("impresion.comprobante_en_ticket") == "1":
+        impresion.encolar(
+            caja_imp,
+            f"Comprobante {doc.numero}",
+            impresion.comprobante_ticket(doc, url_de(doc), caja_imp.columnas),
+        )
+    if (
+        any(p["forma"] == "efectivo" for p in fiscal.pagos(doc))
+        and configuracion.obtener("impresion.abrir_gaveta") == "1"
+    ):
+        impresion.encolar(
+            caja_imp,
+            "Apertura de gaveta",
+            impresion.Ticket().gaveta().bytes(cortar=False),
+        )
+    db.session.commit()
+    _imprimir()

@@ -47,9 +47,28 @@
           ><small>{{ current_user.nombre_rol }}</small
           ><b>{{ current_user.nombre }}</b></span
         >
-        {% if current_user.rol == 'programador' %}
-        <a class="btn btn-gris" href="{{ url_for('dev.inicio') }}">Consola</a>
-        {% endif %}
+        <nav class="menu-cabecera" aria-label="Menú">
+          {% if current_user.puede('supervisor') %}<a
+            class="btn btn-gris"
+            href="{{ url_for('reportes.inicio') }}"
+            >Reportes</a
+          >{% endif %} {% if current_user.puede('administrador') %}<a
+            class="btn btn-gris"
+            href="{{ url_for('admin.inicio') }}"
+            >Administración</a
+          >{% endif %} {% if current_user.rol == 'programador' %}<a
+            class="btn btn-gris"
+            href="{{ url_for('dev.inicio') }}"
+            >Consola</a
+          >{% endif %}
+          <a
+            class="btn btn-gris"
+            href="{{ url_for('cuenta.inicio') }}"
+            title="Mi cuenta"
+            aria-label="Mi cuenta"
+            >⚙</a
+          >
+        </nav>
         <form
           method="post"
           action="{{ url_for('auth.salir') }}"

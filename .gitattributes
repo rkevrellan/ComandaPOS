@@ -1,0 +1,7 @@
+*.bat text eol=crlf
+*.iss text eol=crlf
+docs/PRIMEROS_PASOS.txt text eol=crlf
+LICENCIA.txt text eol=crlf
+*.png binary
+*.pdf binary
+*.ico binary

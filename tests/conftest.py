@@ -63,3 +63,15 @@ def como(client):
         return client
 
     return _como
+
+
+@pytest.fixture
+def otro(app):
+    """Otra terminal con su propia sesión: `otro("marta")`."""
+
+    def _otro(usuario: str):
+        c = app.test_client()
+        assert entrar(c, usuario).status_code == 302
+        return c
+
+    return _otro

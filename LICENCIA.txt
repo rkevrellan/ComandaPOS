@@ -1,0 +1,16 @@
+﻿ComandaPOS 1.0
+Copyright (c) 2026 Kevin Rellán. Todos los derechos reservados.
+
+Este programa se entrega para su uso en el establecimiento autorizado por su autor. No se permite
+copiarlo, redistribuirlo ni venderlo sin autorización escrita del autor.
+
+El programa se entrega "tal cual", sin garantías de ningún tipo. El cumplimiento de las obligaciones
+fiscales (facturación electrónica, ITBMS, conservación de documentos) es responsabilidad del
+contribuyente que lo usa, con la asesoría de su contador y de su Proveedor de Autorización
+Calificado (PAC).
+
+Componentes de terceros incluidos (cada uno con su propia licencia):
+  Python (PSF), Flask, Werkzeug, Jinja2, MarkupSafe, itsdangerous, click (BSD-3-Clause),
+  Flask-SQLAlchemy, Flask-Login (MIT/BSD), SQLAlchemy (MIT), waitress (ZPL 2.1),
+  ReportLab (BSD), keyring (MIT), pywebview (BSD-3-Clause), PyInstaller bootloader (GPL con
+  excepción de distribución).

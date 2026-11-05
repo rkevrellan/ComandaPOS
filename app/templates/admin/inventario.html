@@ -1,0 +1,119 @@
+{% extends "base.html" %} {% block titulo %}Inventario{% endblock %} {% block
+contenido %}
+<div class="encabezado-pagina">
+  <h1>Inventario</h1>
+  <div class="fila-botones">
+    <a class="btn corto" href="{{ url_for('admin.catalogo', clave='insumos') }}"
+      >Insumos</a
+    >
+    <a class="btn btn-gris" href="{{ url_for('admin.inicio') }}"
+      >← Administración</a
+    >
+  </div>
+</div>
+<p class="vacio">
+  Las ventas descuentan la receta al enviar el pedido; si se anula antes de
+  estar listo, vuelve al inventario.
+</p>
+<table class="tabla">
+  <thead>
+    <tr>
+      <th>Insumo</th>
+      <th class="num">Existencia</th>
+      <th class="num">Mínimo</th>
+      <th>Entrada (compra)</th>
+      <th>Ajuste (conteo físico)</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for i in insumos %}
+    <tr
+      class="{{ 'bajo' if i.bajo else '' }} {{ '' if i.activo else 'inactiva' }}"
+    >
+      <td>
+        <b>{{ i.nombre }}</b>{% if i.bajo %}
+        <span class="chip estado-precuenta">bajo</span>{% endif %}
+      </td>
+      <td class="num">{{ i.existencia.normalize() }} {{ i.unidad }}</td>
+      <td class="num">{{ i.minimo.normalize() }}</td>
+      <td>
+        <form
+          method="post"
+          action="{{ url_for('admin.inventario_movimiento', iid=i.id, accion='entrada') }}"
+          class="fila-mini"
+        >
+          {{ csrf_field() }}
+          <input
+            name="cantidad"
+            inputmode="decimal"
+            placeholder="Cantidad"
+            aria-label="Cantidad que entra de {{ i.nombre }}"
+            required
+          />
+          <input
+            name="referencia"
+            placeholder="Factura / proveedor"
+            aria-label="Referencia"
+            maxlength="80"
+          />
+          <button class="btn btn-mini" type="submit">Entrar</button>
+        </form>
+      </td>
+      <td>
+        <form
+          method="post"
+          action="{{ url_for('admin.inventario_movimiento', iid=i.id, accion='ajuste') }}"
+          class="fila-mini"
+        >
+          {{ csrf_field() }}
+          <input
+            name="existencia"
+            inputmode="decimal"
+            placeholder="Contado"
+            aria-label="Existencia contada de {{ i.nombre }}"
+            required
+          />
+          <input
+            name="motivo"
+            placeholder="Motivo"
+            aria-label="Motivo del ajuste"
+            maxlength="80"
+            required
+          />
+          <button class="btn btn-mini" type="submit">Ajustar</button>
+        </form>
+      </td>
+    </tr>
+    {% else %}
+    <tr>
+      <td colspan="5" class="vacio">No hay insumos. Créalos en «Insumos».</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+<h2 class="separada">Movimientos recientes</h2>
+<table class="tabla">
+  <thead>
+    <tr>
+      <th>Fecha</th>
+      <th>Insumo</th>
+      <th>Tipo</th>
+      <th class="num">Cantidad</th>
+      <th>Referencia</th>
+      <th>Operador</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for m in movimientos %}
+    <tr>
+      <td>{{ m.fecha | fecha }}</td>
+      <td>{{ m.insumo.nombre }}</td>
+      <td>{{ m.tipo }}</td>
+      <td class="num">{{ m.cantidad.normalize() }}</td>
+      <td>{{ m.referencia }}</td>
+      <td>{{ m.operador.usuario if m.operador else '' }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

@@ -1,0 +1,85 @@
+{% extends "base.html" %} {% block titulo %}Nota de crédito{% endblock %} {%
+block contenido %}
+<section class="tarjeta tarjeta-centro">
+  <h1>
+    Nota de crédito
+    <small
+      >sobre el comprobante {{ '%010d' % doc.numero }} · B/. {{ doc.total |
+      dinero }} · {{ doc.receptor_nombre }}</small
+    >
+  </h1>
+  <p>
+    Un comprobante autorizado no se modifica: se corrige con una nota de crédito
+    electrónica que lo referencia. Indica cuánto devolver de cada producto.
+  </p>
+  <form method="post" class="form-columna ancha" autocomplete="off">
+    {{ csrf_field() }}
+    <table class="tabla">
+      <thead>
+        <tr>
+          <th>Producto</th>
+          <th class="num">Vendido</th>
+          <th class="num">Disponible</th>
+          <th class="num">Total línea</th>
+          <th>Acreditar</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for it in items %} {% set i = loop.index0 %}
+        <tr>
+          <td>{{ it.descripcion }}</td>
+          <td class="num">{{ it.cantidad }}</td>
+          <td class="num">{{ restantes[i].normalize() }}</td>
+          <td class="num">{{ it.total }}</td>
+          <td>
+            <input
+              class="cant"
+              name="cant_{{ i }}"
+              inputmode="decimal"
+              placeholder="0"
+              aria-label="Cantidad a acreditar de {{ it.descripcion }}"
+              value="{{ previo.get('cant_' ~ i, '') }}"
+            />
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <label for="motivo">Motivo (obligatorio)</label>
+    <input
+      id="motivo"
+      name="motivo"
+      minlength="10"
+      maxlength="200"
+      required
+      value="{{ previo.get('motivo', '') }}"
+    />
+    <label for="forma">Devolución en</label>
+    <select id="forma" name="forma">
+      {% for clave, nombre in formas.items() %}
+      <option value="{{ clave }}">{{ nombre }}</option>
+      {% endfor %}
+    </select>
+    {% if not current_user.puede('supervisor') %}
+    <p class="aviso aviso-info">Hace falta la autorización de un supervisor.</p>
+    <label for="sup_usuario">Usuario del supervisor</label>
+    <input
+      id="sup_usuario"
+      name="sup_usuario"
+      autocapitalize="none"
+      maxlength="30"
+    />
+    <label for="sup_clave">Contraseña autorizada</label>
+    <input id="sup_clave" name="sup_clave" type="password" maxlength="128" />
+    {% endif %}
+    <div class="fila-botones">
+      <a
+        class="btn btn-gris"
+        href="{{ url_for('salon.documento', did=doc.id) }}"
+        >Cancelar</a
+      >
+      <button class="btn peligro" type="submit">Emitir nota de crédito</button>
+    </div>
+  </form>
+</section>
+{% endblock %}

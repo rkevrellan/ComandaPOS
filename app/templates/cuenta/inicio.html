@@ -1,0 +1,118 @@
+{% extends "base.html" %} {% block titulo %}Mi cuenta{% endblock %} {% block
+contenido %}
+<div class="encabezado-pagina">
+  <h1>
+    Mi cuenta
+    <small class="suave"
+      >{{ current_user.nombre }} · {{ current_user.nombre_rol }}</small
+    >
+  </h1>
+  <a class="btn btn-gris" href="{{ url_for('mesas.control') }}">← Mesas</a>
+</div>
+{% if obligatoria and not current_user.tiene_2fa %}
+<p class="aviso aviso-error">
+  Tu nivel exige la verificación en dos pasos. Actívala para continuar.
+</p>
+{% endif %}
+<div class="tarjetas">
+  <section class="tarjeta">
+    <h2>Cambiar {{ 'PIN' if current_user.usa_pin else 'contraseña' }}</h2>
+    <form
+      method="post"
+      action="{{ url_for('cuenta.cambiar_clave') }}"
+      class="form-columna"
+      autocomplete="off"
+    >
+      {{ csrf_field() }}
+      <label for="actual"
+        >{{ 'PIN' if current_user.usa_pin else 'Contraseña' }} actual</label
+      >
+      <input
+        id="actual"
+        name="actual"
+        type="password"
+        required
+        maxlength="128"
+      />
+      <label for="nueva"
+        >Nuevo{{ ' (6 dígitos, sin secuencias)' if current_user.usa_pin else 'a
+        (10 caracteres o más, con letras y números)' }}</label
+      >
+      <input id="nueva" name="nueva" type="password" required maxlength="128" />
+      <label for="repetir">Repetir</label>
+      <input
+        id="repetir"
+        name="repetir"
+        type="password"
+        required
+        maxlength="128"
+      />
+      <button class="btn btn-aceptar" type="submit">Cambiar</button>
+    </form>
+  </section>
+
+  <section class="tarjeta">
+    <h2>Verificación en dos pasos</h2>
+    {% if current_user.tiene_2fa %}
+    <p class="estado-ok">
+      ✔ Activa · {{ restantes }} códigos de recuperación disponibles
+    </p>
+    <form
+      method="post"
+      action="{{ url_for('cuenta.nuevos_codigos') }}"
+      class="form-columna"
+      autocomplete="off"
+    >
+      {{ csrf_field() }}
+      <label for="codigo-rec">Código actual de la aplicación</label>
+      <input
+        id="codigo-rec"
+        name="codigo"
+        inputmode="numeric"
+        maxlength="6"
+        required
+      />
+      <button class="btn" type="submit">
+        Generar códigos de recuperación nuevos
+      </button>
+    </form>
+    {% if not obligatoria %}
+    <form
+      method="post"
+      action="{{ url_for('cuenta.quitar_2fa') }}"
+      class="form-columna separada"
+      autocomplete="off"
+    >
+      {{ csrf_field() }}
+      <label for="codigo-quitar">Código actual para desactivar</label>
+      <input
+        id="codigo-quitar"
+        name="codigo"
+        inputmode="numeric"
+        maxlength="6"
+        required
+      />
+      <button class="btn peligro" type="submit">Desactivar</button>
+    </form>
+    {% endif %} {% else %}
+    <p>
+      Protege tu cuenta con un código del teléfono además de tu clave (Google
+      Authenticator, Microsoft Authenticator…).
+    </p>
+    <a class="btn btn-aceptar" href="{{ url_for('cuenta.activar_2fa') }}"
+      >Activar</a
+    >
+    {% endif %}
+  </section>
+
+  <section class="tarjeta">
+    <h2>Sesiones</h2>
+    <p>¿Dejaste la sesión abierta en otra terminal? Ciérrala desde aquí.</p>
+    <form method="post" action="{{ url_for('cuenta.salir_de_todo') }}">
+      {{ csrf_field() }}<button class="btn" type="submit">
+        Cerrar sesión en las demás terminales
+      </button>
+    </form>
+  </section>
+</div>
+{% endblock %}

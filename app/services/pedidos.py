@@ -308,22 +308,28 @@ def mover_linea(linea: LineaPedido, destino: Cuenta) -> None:
     _reabrir_si_precuenta(destino)
 
 
-def enviar(comanda: Comanda) -> int:
-    """Manda a cada área de producción las líneas en PED. Devuelve cuántas envió."""
+def enviar(comanda: Comanda, operador: Operador | None = None) -> int:
+    """Manda a cada área de producción las líneas en PED: pantalla de cocina, comanda impresa
+    por área y salida de inventario (RN-14). Devuelve cuántas líneas envió."""
+    from . import impresion, inventario
+
     if comanda.estado != "abierta":
         raise ReglaNegocioError("La comanda ya está cerrada.")
     momento = ahora()
-    total = 0
+    enviadas = []
     for cuenta in comanda.cuentas:
         for linea in cuenta.lineas:
             if linea.estado == "PED":
                 linea.estado = "ORD"
                 linea.enviado = True
                 linea.enviado_en = momento
-                total += 1
-    if total:
-        auditar("pedido_enviado", f"comanda {comanda.numero}: {total} línea(s)")
-    return total
+                enviadas.append(linea)
+    if enviadas:
+        db.session.flush()
+        inventario.consumir(enviadas, operador or comanda.mesero)
+        impresion.encolar_comandas(comanda, enviadas)
+        auditar("pedido_enviado", f"comanda {comanda.numero}: {len(enviadas)} línea(s)")
+    return len(enviadas)
 
 
 def anular(
@@ -343,7 +349,27 @@ def anular(
         raise ReglaNegocioError(
             "Explica el motivo de la anulación (mínimo 10 caracteres)."
         )
+    from . import impresion, inventario
+
+    estado_previo = linea.estado
     linea.estado = "ANU"
+    if estado_previo in (
+        "ORD",
+        "PRO",
+    ):  # RN-14: todavía no se preparó → vuelve al inventario
+        inventario.reversar(linea, autorizador)
+    if (
+        linea.area is not None
+        and linea.area.impresora_obj is not None
+        and estado_previo != "ENT"
+    ):
+        impresion.encolar(
+            linea.area.impresora_obj,
+            f"Anulación comanda {linea.cuenta.comanda.numero}",
+            impresion.aviso_anulacion(
+                linea, autorizador, motivo, linea.area.impresora_obj.columnas
+            ),
+        )
     db.session.add(
         Anulacion(
             linea=linea,

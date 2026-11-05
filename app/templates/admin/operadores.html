@@ -1,0 +1,52 @@
+{% extends "base.html" %} {% block titulo %}Operadores{% endblock %} {% block
+contenido %}
+<div class="encabezado-pagina">
+  <h1>Operadores</h1>
+  <div class="fila-botones">
+    <a
+      class="btn btn-aceptar corto"
+      href="{{ url_for('admin.operador_nuevo') }}"
+      >Nuevo operador</a
+    >
+    <a class="btn btn-gris" href="{{ url_for('admin.inicio') }}"
+      >← Administración</a
+    >
+  </div>
+</div>
+<table class="tabla">
+  <thead>
+    <tr>
+      <th>Cód.</th>
+      <th>Nombre</th>
+      <th>Cargo</th>
+      <th>Usuario</th>
+      <th>Nivel</th>
+      <th>2 pasos</th>
+      <th>Último acceso</th>
+      <th>Estado</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for op in operadores %}
+    <tr class="{{ '' if op.activo else 'inactiva' }}">
+      <td>{{ op.codigo }}</td>
+      <td>{{ op.nombre }}</td>
+      <td>{{ op.cargo }}</td>
+      <td><code>{{ op.usuario }}</code></td>
+      <td>{{ roles[op.rol] }}</td>
+      <td>{{ 'Sí' if op.tiene_2fa else '—' }}</td>
+      <td>{{ op.ultimo_acceso | fecha }}</td>
+      <td>{{ 'Activo' if op.activo else 'Inactivo' }}</td>
+      <td>
+        {% if op.rol != 'programador' or current_user.rol == 'programador' %}<a
+          class="enlace"
+          href="{{ url_for('admin.operador_editar', oid=op.id) }}"
+          >Editar</a
+        >{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

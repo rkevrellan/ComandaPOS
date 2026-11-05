@@ -1,0 +1,385 @@
+{% extends "base.html" %} {% block titulo %}Reportes{% endblock %} {% block
+contenido %} {% set qs = {'desde': desde.isoformat(), 'hasta':
+hasta.isoformat()} %}
+<div class="encabezado-pagina">
+  <h1>
+    Reportes
+    <small class="suave"
+      >{{ desde.strftime('%d/%m/%Y') }}{{ ' – ' ~ hasta.strftime('%d/%m/%Y') if
+      hasta != desde else '' }}</small
+    >
+  </h1>
+  <a class="btn btn-gris" href="{{ url_for('mesas.control') }}">← Mesas</a>
+</div>
+<form method="get" class="fila-botones">
+  <label
+    >Desde <input type="date" name="desde" value="{{ desde.isoformat() }}"
+  /></label>
+  <label
+    >Hasta <input type="date" name="hasta" value="{{ hasta.isoformat() }}"
+  /></label>
+  <button class="btn corto" type="submit">Ver</button>
+</form>
+
+<div class="kpis">
+  <div class="kpi"><small>Ventas</small><b>B/. {{ r.ventas | dinero }}</b></div>
+  <div class="kpi"><small>Comprobantes</small><b>{{ r.documentos }}</b></div>
+  <div class="kpi">
+    <small>Ticket promedio</small><b>B/. {{ r.ticket_promedio | dinero }}</b>
+  </div>
+  <div class="kpi">
+    <small>Notas de crédito</small><b>B/. {{ r.notas_total | dinero }}</b>
+  </div>
+  <div class="kpi"><small>Neto</small><b>B/. {{ r.neto | dinero }}</b></div>
+  <div class="kpi">
+    <small>ITBMS neto</small><b>B/. {{ r.itbms_total | dinero }}</b>
+  </div>
+</div>
+
+<div class="tarjetas">
+  <section class="tarjeta tarjeta-ancha">
+    <h2>Ventas por día y hora <small class="suave">(mapa de calor)</small></h2>
+    {% if r.documentos %}
+    <table class="calor">
+      <thead>
+        <tr>
+          <th></th>
+          {% for h in r.calor.horas %}
+          <th>{{ '%02d' % h }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for dia in range(7) %}
+        <tr>
+          <th>{{ dias[dia] }}</th>
+          {% for h in r.calor.horas %}{% set v = r.calor.celdas.get((dia, h)) %}
+          <td
+            class="nivel-{{ nivel(v, r.calor.maximo) }}"
+            title="{{ dias[dia] }} {{ h }}:00 · B/. {{ (v or 0) | dinero }}"
+          ></td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="vacio">Sin ventas en el período.</p>
+    {% endif %}
+  </section>
+
+  <section class="tarjeta">
+    <h2>
+      Por forma de pago
+      <a
+        class="enlace csv"
+        href="{{ url_for('reportes.csv', nombre='formas', **qs) }}"
+        >CSV</a
+      >
+    </h2>
+    {% set maximo = (r.por_forma | map(attribute=1) | max) if r.por_forma else 0
+    %}
+    <ul class="barras">
+      {% for f, m in r.por_forma %}
+      <li>
+        <span>{{ formas.get(f, f) }}</span
+        ><meter min="0" max="{{ maximo }}" value="{{ m }}"></meter
+        ><b>{{ m | dinero }}</b>
+      </li>
+      {% else %}
+      <li class="vacio">Sin datos.</li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  <section class="tarjeta">
+    <h2>
+      Por mesero
+      <a
+        class="enlace csv"
+        href="{{ url_for('reportes.csv', nombre='meseros', **qs) }}"
+        >CSV</a
+      >
+    </h2>
+    {% set maximo = (r.por_mesero | map(attribute=1) | map(attribute=1) | max)
+    if r.por_mesero else 0 %}
+    <ul class="barras">
+      {% for m, (n, t) in r.por_mesero %}
+      <li>
+        <span>{{ m }} <small>({{ n }})</small></span
+        ><meter min="0" max="{{ maximo }}" value="{{ t }}"></meter
+        ><b>{{ t | dinero }}</b>
+      </li>
+      {% else %}
+      <li class="vacio">Sin datos.</li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  <section class="tarjeta">
+    <h2>
+      Por sección
+      <a
+        class="enlace csv"
+        href="{{ url_for('reportes.csv', nombre='secciones', **qs) }}"
+        >CSV</a
+      >
+    </h2>
+    {% set maximo = (r.por_seccion | map(attribute=1) | max) if r.por_seccion
+    else 0 %}
+    <ul class="barras">
+      {% for s, t in r.por_seccion %}
+      <li>
+        <span>{{ s }}</span
+        ><meter min="0" max="{{ maximo }}" value="{{ t }}"></meter
+        ><b>{{ t | dinero }}</b>
+      </li>
+      {% else %}
+      <li class="vacio">Sin datos.</li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  <section class="tarjeta">
+    <h2>
+      Productos más vendidos
+      <a
+        class="enlace csv"
+        href="{{ url_for('reportes.csv', nombre='productos', **qs) }}"
+        >CSV</a
+      >
+    </h2>
+    <table class="tabla">
+      <thead>
+        <tr>
+          <th>Producto</th>
+          <th class="num">Cant.</th>
+          <th class="num">Ventas</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p, (c, t) in r.por_producto %}
+        <tr>
+          <td>{{ p }}</td>
+          <td class="num">{{ c.normalize() }}</td>
+          <td class="num">{{ t | dinero }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="3" class="vacio">Sin datos.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="tarjeta">
+    <h2>
+      ITBMS por tasa
+      <a
+        class="enlace csv"
+        href="{{ url_for('reportes.csv', nombre='itbms', **qs) }}"
+        >CSV</a
+      >
+    </h2>
+    <p class="vacio">
+      Neto de notas de crédito. Para la declaración mensual de ITBMS.
+    </p>
+    <table class="tabla">
+      <thead>
+        <tr>
+          <th>Tasa</th>
+          <th class="num">Base</th>
+          <th class="num">ITBMS</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t, (b, i) in r.itbms %}
+        <tr>
+          <td>{{ 'Exento' if t == 0 else t ~ ' %' }}</td>
+          <td class="num">{{ b | dinero }}</td>
+          <td class="num">{{ i | dinero }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="3" class="vacio">Sin datos.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="tarjeta">
+    <h2>
+      Por día
+      <a
+        class="enlace csv"
+        href="{{ url_for('reportes.csv', nombre='dias', **qs) }}"
+        >CSV</a
+      >
+    </h2>
+    <table class="tabla">
+      <thead>
+        <tr>
+          <th>Día</th>
+          <th class="num">Comprob.</th>
+          <th class="num">Ventas</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d, (n, t) in r.por_dia %}
+        <tr>
+          <td>{{ d.strftime('%d/%m/%Y') }}</td>
+          <td class="num">{{ n }}</td>
+          <td class="num">{{ t | dinero }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="3" class="vacio">Sin datos.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="tarjeta">
+    <h2>Tiempos de cocina</h2>
+    <table class="tabla">
+      <thead>
+        <tr>
+          <th>Área</th>
+          <th class="num">Platos</th>
+          <th class="num">Preparación</th>
+          <th class="num">Hasta la mesa</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for area, n, prep, ent in r.tiempos %}
+        <tr>
+          <td>{{ area }}</td>
+          <td class="num">{{ n }}</td>
+          <td class="num">{{ prep ~ ' min' if prep is not none else '—' }}</td>
+          <td class="num">{{ ent ~ ' min' if ent is not none else '—' }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="4" class="vacio">Sin datos.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="tarjeta tarjeta-ancha">
+    <h2>
+      Descuentos a jubilados · B/. {{ r.jubilados_total | dinero }}
+      <a
+        class="enlace csv"
+        href="{{ url_for('reportes.csv', nombre='jubilados', **qs) }}"
+        >CSV</a
+      >
+    </h2>
+    <table class="tabla">
+      <thead>
+        <tr>
+          <th>Comprobante</th>
+          <th>Fecha</th>
+          <th>Cédula</th>
+          <th>Nombre</th>
+          <th class="num">Descuento</th>
+          <th class="num">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d, c, n in r.jubilados %}
+        <tr>
+          <td>{{ '%010d' % d.numero }}</td>
+          <td>{{ d.emitido_en | fecha }}</td>
+          <td>{{ c }}</td>
+          <td>{{ n }}</td>
+          <td class="num">{{ d.descuento_jubilado | dinero }}</td>
+          <td class="num">{{ d.total | dinero }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="6" class="vacio">Sin descuentos a jubilados.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="tarjeta tarjeta-ancha">
+    <h2>
+      Anulaciones
+      <a
+        class="enlace csv"
+        href="{{ url_for('reportes.csv', nombre='anulaciones', **qs) }}"
+        >CSV</a
+      >
+    </h2>
+    <table class="tabla">
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Comanda</th>
+          <th>Producto</th>
+          <th>Solicitó</th>
+          <th>Autorizó</th>
+          <th>Motivo</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in r.anulaciones %}
+        <tr>
+          <td>{{ a.fecha | fecha }}</td>
+          <td>{{ a.linea.cuenta.comanda.numero }}</td>
+          <td>
+            {{ a.linea.cantidad.normalize() }} × {{ a.linea.descripcion }}
+          </td>
+          <td>{{ a.solicitante.nombre }}</td>
+          <td>{{ a.autorizador.nombre }}</td>
+          <td>{{ a.motivo }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="6" class="vacio">Sin anulaciones.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  {% if r.notas %}
+  <section class="tarjeta tarjeta-ancha">
+    <h2>Notas de crédito</h2>
+    <table class="tabla">
+      <thead>
+        <tr>
+          <th>NC</th>
+          <th>Fecha</th>
+          <th>Comprobante</th>
+          <th>Motivo</th>
+          <th class="num">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for n in r.notas %}
+        <tr>
+          <td>
+            <a class="enlace" href="{{ url_for('salon.ver_nota', nid=n.id) }}"
+              >{{ '%010d' % n.numero }}</a
+            >
+          </td>
+          <td>{{ n.emitido_en | fecha }}</td>
+          <td>{{ '%010d' % n.documento.numero }}</td>
+          <td>{{ n.motivo }}</td>
+          <td class="num">{{ n.total | dinero }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

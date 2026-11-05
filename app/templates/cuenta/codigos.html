@@ -1,0 +1,18 @@
+{% extends "base.html" %} {% block titulo %}Códigos de recuperación{% endblock
+%} {% block contenido %}
+<section class="tarjeta tarjeta-centro">
+  <h1>Códigos de recuperación</h1>
+  <p class="aviso aviso-info">
+    Anótalos y guárdalos en un lugar seguro. Cada uno sirve
+    <b>una sola vez</b> si pierdes el teléfono. No se vuelven a mostrar.
+  </p>
+  <ul class="codigos">
+    {% for c in codigos %}
+    <li><code class="seleccionable">{{ c }}</code></li>
+    {% endfor %}
+  </ul>
+  <a class="btn btn-aceptar" href="{{ url_for('cuenta.inicio') }}"
+    >Ya los guardé</a
+  >
+</section>
+{% endblock %}

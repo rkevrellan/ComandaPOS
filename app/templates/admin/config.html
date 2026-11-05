@@ -1,0 +1,91 @@
+{% extends "base.html" %} {% block titulo %}Configuración{% endblock %} {% block
+contenido %}
+<div class="encabezado-pagina">
+  <h1>Configuración</h1>
+  <a class="btn btn-gris" href="{{ url_for('admin.inicio') }}"
+    >← Administración</a
+  >
+</div>
+<form method="post" class="tarjetas" autocomplete="off">
+  {{ csrf_field() }} {% for grupo, campos in grupos %}
+  <section class="tarjeta">
+    <h2>{{ grupo }}</h2>
+    <div class="form-columna">
+      {% for clave, etiqueta, tipo in campos %} {% set v = valores[clave] %} {%
+      if tipo == 'si_no' %}
+      <label class="opcion-check">
+        {% if v == '1' %}<input
+          type="checkbox"
+          name="{{ clave }}"
+          value="1"
+          checked
+        />{% else %}<input type="checkbox" name="{{ clave }}" value="1" />{%
+        endif %}
+        <span>{{ etiqueta }}</span>
+      </label>
+      {% elif tipo in ('proveedor', 'establecimiento') %}
+      <label for="{{ clave }}">{{ etiqueta }}</label>
+      <select id="{{ clave }}" name="{{ clave }}">
+        {% set opciones = [('simulado', 'Simulado (solo demostración)'),
+        ('http', 'PAC por HTTP (producción)'), ('ninguno', 'Ninguno (todo queda
+        en contingencia)')] if tipo == 'proveedor' else [('restaurante',
+        'Restaurante (25 %)'), ('franquicia', 'Franquicia de comida rápida (15
+        %)'), ('fonda', 'Fonda (sin descuento)')] %} {% for valor, texto in
+        opciones %} {% if v == valor %}
+        <option value="{{ valor }}" selected>{{ texto }}</option>
+        {% else %}
+        <option value="{{ valor }}">{{ texto }}</option>
+        {% endif %} {% endfor %}
+      </select>
+      {% else %}
+      <label for="{{ clave }}">{{ etiqueta }}</label>
+      <input
+        id="{{ clave }}"
+        name="{{ clave }}"
+        value="{{ v }}"
+        maxlength="200"
+      />
+      {% endif %} {% endfor %}
+    </div>
+  </section>
+  {% endfor %}
+  <div class="fila-botones tarjeta-ancha">
+    <button class="btn btn-aceptar corto" type="submit">
+      Guardar configuración
+    </button>
+  </div>
+</form>
+
+<section class="tarjeta separada">
+  <h2>Credencial del PAC</h2>
+  <p>
+    Se guarda en el almacén seguro del sistema (DPAPI en Windows), nunca en la
+    base de datos ni en pantalla. Estado:
+    <b>{{ 'configurada' if tiene_token else 'sin configurar' }}</b>.
+  </p>
+  {% if almacen %}
+  <form
+    method="post"
+    action="{{ url_for('admin.pac_token') }}"
+    class="fila-botones"
+    autocomplete="off"
+  >
+    {{ csrf_field() }}
+    <input
+      name="token"
+      type="password"
+      maxlength="4000"
+      placeholder="Token o clave de API del PAC"
+      aria-label="Token del PAC"
+      required
+    />
+    <button class="btn corto" type="submit">Guardar credencial</button>
+  </form>
+  {% else %}
+  <p class="vacio">
+    Este equipo no tiene almacén seguro (paquete «keyring»). Define la variable
+    de entorno <code>COMANDAPOS_PAC_TOKEN</code>.
+  </p>
+  {% endif %}
+</section>
+{% endblock %}

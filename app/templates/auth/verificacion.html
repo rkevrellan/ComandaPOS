@@ -1,0 +1,57 @@
+{% extends "base.html" %} {% block titulo %}Verificación en dos pasos{% endblock
+%} {% block clase_body %}pantalla-acceso{% endblock %} {% block clase_main
+%}acceso{% endblock %} {% block contenido %}
+<section class="tarjeta-acceso" aria-labelledby="titulo-2fa">
+  <div class="acceso-marca">
+    <img
+      src="{{ url_for('static', filename='img/logo.svg') }}"
+      alt=""
+      width="56"
+      height="56"
+    />
+    <div>
+      <p class="acceso-nombre">{{ NOMBRE }}</p>
+      <p class="acceso-version">{{ operador.nombre }}</p>
+    </div>
+  </div>
+  <h1 id="titulo-2fa">Verificación en dos pasos</h1>
+  <p>
+    Escribe el código de 6 dígitos de tu aplicación de autenticación (o un
+    código de recuperación).
+  </p>
+  <form method="post" class="form-acceso" autocomplete="off" data-teclado-form>
+    {{ csrf_field() }}
+    <label for="codigo">Código</label>
+    <input
+      id="codigo"
+      name="codigo"
+      inputmode="numeric"
+      maxlength="11"
+      required
+      autofocus
+      data-campo-teclado
+    />
+    <div class="teclado" role="group" aria-label="Teclado numérico">
+      <div class="teclado-fila">
+        {% for tecla in "1234567890" %}<button
+          type="button"
+          class="tecla"
+          data-tecla="{{ tecla }}"
+        >
+          {{ tecla }}</button
+        >{% endfor %}
+        <button
+          type="button"
+          class="tecla tecla-ancha"
+          data-accion="borrar"
+          aria-label="Borrar"
+        >
+          ⌫
+        </button>
+      </div>
+    </div>
+    <button type="submit" class="btn btn-aceptar">Verificar</button>
+  </form>
+  <p><a class="enlace" href="{{ url_for('auth.acceso') }}">Volver</a></p>
+</section>
+{% endblock %}

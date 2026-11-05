@@ -19,6 +19,9 @@ from app.models import (
     Acompanamiento,
     AreaProduccion,
     Cliente,
+    Impresora,
+    Insumo,
+    RecetaItem,
     Mesa,
     NotaFija,
     Operador,
@@ -269,8 +272,14 @@ def poblar() -> bool:
         op.fijar_clave(PIN_DEMO if rol in ROLES_CON_PIN else CLAVE_DEMO)
         db.session.add(op)
 
-    cocina = AreaProduccion(codigo=1, descripcion="Cocina")
-    frente = AreaProduccion(codigo=2, descripcion="Frente")
+    # Impresoras «archivo»: en la demostración cada trabajo se guarda en la carpeta de datos
+    # (impresiones/*.bin) y se ve en Administración → Impresoras. En el local se cambian a «red».
+    imp_cocina = Impresora(nombre="Cocina (demo)", tipo="archivo", destino="cocina")
+    imp_frente = Impresora(nombre="Frente (demo)", tipo="archivo", destino="frente")
+    imp_caja = Impresora(nombre="Caja (demo)", tipo="archivo", destino="caja")
+    db.session.add_all([imp_cocina, imp_frente, imp_caja])
+    cocina = AreaProduccion(codigo=1, descripcion="Cocina", impresora_obj=imp_cocina)
+    frente = AreaProduccion(codigo=2, descripcion="Frente", impresora_obj=imp_frente)
     db.session.add_all([cocina, frente])
 
     salon = Sala(nombre="Salón", orden=1, tipo="salon")
@@ -345,6 +354,49 @@ def poblar() -> bool:
     configuracion.asegurar_valores()
     secuencias.asegurar_secuencias()
     auditoria.auditar("datos_demo", "Se crearon los datos de demostración")
+    db.session.flush()
+    configuracion.fijar("impresion.caja", imp_caja.id)
+
+    # Inventario de ejemplo: algunos productos descuentan su receta al enviarse (RN-14).
+    insumos = {}
+    for codigo, (nombre, unidad, existencia, minimo) in enumerate(
+        [
+            ("Soda en lata", "unid", "48", "12"),
+            ("Agua en botella", "unid", "24", "6"),
+            ("Cerveza nacional", "unid", "36", "12"),
+            ("Pollo (cuartos)", "unid", "40", "8"),
+            ("Tasajo", "lb", "10", "2"),
+            ("Arroz", "lb", "50", "10"),
+        ],
+        start=1,
+    ):
+        insumos[nombre] = Insumo(
+            codigo=codigo,
+            nombre=nombre,
+            unidad=unidad,
+            existencia=Decimal(existencia),
+            minimo=Decimal(minimo),
+        )
+        db.session.add(insumos[nombre])
+    db.session.flush()
+    for corta, receta in {
+        "SODA LATA": [("Soda en lata", "1")],
+        "AGUA BOTELLA": [("Agua en botella", "1")],
+        "CERVEZA NACIONAL": [("Cerveza nacional", "1")],
+        "POLLO ASADO": [("Pollo (cuartos)", "1")],
+        "TASAJO": [("Tasajo", "0.25")],
+        "ARROZ CON POLLO": [("Pollo (cuartos)", "1"), ("Arroz", "0.5")],
+    }.items():
+        producto = Producto.query.filter_by(descripcion_corta=corta).one()
+        producto.condicion = "activo_cinv"
+        for nombre, cantidad in receta:
+            db.session.add(
+                RecetaItem(
+                    producto_id=producto.id,
+                    insumo_id=insumos[nombre].id,
+                    cantidad=Decimal(cantidad),
+                )
+            )
     db.session.commit()
     # Turno de caja abierto para que la demostración permita cobrar desde el primer momento.
     cajera = Operador.query.filter_by(usuario="marta").one()

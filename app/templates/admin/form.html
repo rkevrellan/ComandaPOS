@@ -1,0 +1,113 @@
+{% extends "base.html" %} {% block titulo %}{{ cat.singular | capitalize }}{%
+endblock %} {% block contenido %}
+<div class="encabezado-pagina">
+  <h1>{{ ('Editar ' ~ cat.singular) if obj.id else (cat.nuevo ~ ' ' ~ cat.singular) }}</h1>
+  <a
+    class="btn btn-gris"
+    href="{{ url_for('admin.catalogo', clave=cat.clave) }}"
+    >← {{ cat.titulo }}</a
+  >
+</div>
+<section class="tarjeta">
+  <form method="post" class="form-rejilla" autocomplete="off">
+    {{ csrf_field() }} {% for campo in cat.campos %} {% set actual =
+    previo.get(campo.nombre, '') if previo else cat.valor(obj, campo.nombre) %}
+    {% if campo.tipo == 'si_no' %}
+    <label class="opcion-check">
+      {% if (previo and actual == '1') or (not previo and actual) %}
+      <input type="checkbox" name="{{ campo.nombre }}" value="1" checked />
+      {% else %}
+      <input type="checkbox" name="{{ campo.nombre }}" value="1" />
+      {% endif %}
+      <span>{{ campo.etiqueta }}</span>
+    </label>
+    {% elif campo.tipo in ('opcion', 'relacion') %}
+    <label
+      >{{ campo.etiqueta }}
+      <select name="{{ campo.nombre }}">
+        {% if not campo.requerido %}
+        <option value="">— ninguna —</option>
+        {% endif %} {% for valor, texto in campo.lista_opciones() %} {% if valor
+        == (actual | string) %}
+        <option value="{{ valor }}" selected>{{ texto }}</option>
+        {% else %}
+        <option value="{{ valor }}">{{ texto }}</option>
+        {% endif %} {% endfor %}
+      </select>
+      {% if campo.ayuda %}<small class="ayuda">{{ campo.ayuda }}</small>{% endif
+      %}
+    </label>
+    {% elif campo.tipo == 'color' %}
+    <label
+      >{{ campo.etiqueta }}
+      <input
+        type="color"
+        class="selector-color"
+        name="{{ campo.nombre }}"
+        value="{{ actual if actual else '#334155' }}"
+      />
+    </label>
+    {% else %}
+    <label
+      >{{ campo.etiqueta }}
+      <input
+        name="{{ campo.nombre }}"
+        value="{{ (actual.normalize() if actual.__class__.__name__ == 'Decimal' and campo.tipo == 'cantidad' else actual) if actual is not none else '' }}"
+        maxlength="{{ campo.maximo if campo.tipo == 'texto' else 20 }}"
+        inputmode="{{ 'decimal' if campo.tipo in ('dinero', 'cantidad') else ('numeric' if campo.tipo == 'entero' else 'text') }}"
+      />
+      {% if campo.ayuda %}<small class="ayuda">{{ campo.ayuda }}</small>{% endif
+      %}
+    </label>
+    {% endif %} {% endfor %}
+    <div class="fila-botones ancho">
+      <a
+        class="btn btn-gris"
+        href="{{ url_for('admin.catalogo', clave=cat.clave) }}"
+        >Cancelar</a
+      >
+      <button class="btn btn-aceptar corto" type="submit">Grabar</button>
+    </div>
+  </form>
+</section>
+
+{% if cat.clave == 'productos' and obj.id %}
+<section class="tarjeta separada" id="receta">
+  <h2>
+    Receta (descuenta inventario si la condición es «Activo con inventario»)
+  </h2>
+  <form
+    method="post"
+    action="{{ url_for('admin.receta', pid=obj.id) }}"
+    class="form-receta"
+    autocomplete="off"
+  >
+    {{ csrf_field() }} {% set filas = obj.receta | list %} {% for i in
+    range(filas | length + 3) %} {% set item = filas[i] if i < filas | length
+    else none %}
+    <div class="fila-receta">
+      <select name="insumo" aria-label="Insumo {{ i + 1 }}">
+        <option value="">— insumo —</option>
+        {% for ins in insumos %} {% if item and item.insumo_id == ins.id %}
+        <option value="{{ ins.id }}" selected>
+          {{ ins.nombre }} ({{ ins.unidad }})
+        </option>
+        {% else %}
+        <option value="{{ ins.id }}">
+          {{ ins.nombre }} ({{ ins.unidad }})
+        </option>
+        {% endif %} {% endfor %}
+      </select>
+      <input
+        name="cantidad"
+        inputmode="decimal"
+        placeholder="Cantidad"
+        aria-label="Cantidad {{ i + 1 }}"
+        value="{{ item.cantidad.normalize() if item else '' }}"
+      />
+    </div>
+    {% endfor %}
+    <button class="btn corto" type="submit">Guardar receta</button>
+  </form>
+</section>
+{% endif %} {% endblock %}

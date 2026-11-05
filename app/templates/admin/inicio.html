@@ -1,0 +1,55 @@
+{% extends "base.html" %} {% block titulo %}Administración{% endblock %} {%
+block contenido %}
+<div class="encabezado-pagina">
+  <h1>Administración de archivos</h1>
+  <a class="btn btn-gris" href="{{ url_for('mesas.control') }}">← Mesas</a>
+</div>
+{% if insumos_bajos %}
+<p class="aviso aviso-error">
+  Existencia baja: {% for i in insumos_bajos %}{{ i.nombre }} ({{
+  i.existencia.normalize() }} {{ i.unidad }}){{ ', ' if not loop.last else ''
+  }}{% endfor %}.
+  <a class="enlace" href="{{ url_for('admin.inventario_lista') }}"
+    >Ver inventario</a
+  >
+</p>
+{% endif %} {% if pendientes_impresion %}
+<p class="aviso aviso-error">
+  {{ pendientes_impresion }} impresión(es) con error.
+  <a class="enlace" href="{{ url_for('admin.impresiones') }}">Revisar</a>
+</p>
+{% endif %} {% if folios.alerta %}
+<p class="aviso aviso-error">
+  Quedan {{ folios.disponibles }} folios fiscales.
+</p>
+{% endif %}
+
+<div class="mosaico">
+  {% for clave in ['productos', 'secciones', 'acompanamientos', 'areas',
+  'salas', 'mesas', 'clientes', 'impresoras', 'insumos'] %} {% set c =
+  catalogos[clave] %}
+  <a class="mosaico-item" href="{{ url_for('admin.catalogo', clave=clave) }}"
+    ><b>{{ c.titulo }}</b><small>{{ c.ayuda or 'Crear y editar' }}</small></a
+  >
+  {% endfor %}
+  <a class="mosaico-item" href="{{ url_for('catalogos.notas') }}"
+    ><b>Notas fijas</b><small>Notas predefinidas de la comanda</small></a
+  >
+  <a class="mosaico-item" href="{{ url_for('admin.inventario_lista') }}"
+    ><b>Inventario</b><small>Existencias, entradas y ajustes</small></a
+  >
+  <a class="mosaico-item" href="{{ url_for('admin.operadores') }}"
+    ><b>Operadores</b><small>Usuarios, niveles y claves</small></a
+  >
+  <a class="mosaico-item" href="{{ url_for('admin.config') }}"
+    ><b>Configuración</b
+    ><small>Emisor, descuentos, PAC, impresión, red</small></a
+  >
+  <a class="mosaico-item" href="{{ url_for('admin.impresiones') }}"
+    ><b>Impresiones</b><small>Cola y página de prueba</small></a
+  >
+  <a class="mosaico-item destacado" href="{{ url_for('reportes.inicio') }}"
+    ><b>Reportes</b><small>Ventas, ITBMS, jubilados, anulaciones</small></a
+  >
+</div>
+{% endblock %}

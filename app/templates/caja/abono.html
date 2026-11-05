@@ -1,0 +1,88 @@
+{% extends "base.html" %} {% block titulo %}Abono a crédito{% endblock %} {%
+block contenido %}
+<section class="tarjeta tarjeta-centro">
+  <h1>
+    Abono a crédito <small>{{ cliente.nombre }} · {{ cliente.ruc }}</small>
+  </h1>
+  <dl class="pares">
+    <dt>Límite</dt>
+    <dd>B/. {{ cliente.limite_credito | dinero }}</dd>
+    <dt>Saldo pendiente</dt>
+    <dd><b>B/. {{ deuda | dinero }}</b></dd>
+    <dt>Disponible</dt>
+    <dd>B/. {{ (cliente.limite_credito - deuda) | dinero }}</dd>
+  </dl>
+  {% if recibo %}
+  <p class="aviso aviso-ok aviso-accion">
+    <span>Abono registrado.</span>
+    <a
+      class="btn btn-mini"
+      href="{{ url_for('caja.recibo', aid=recibo) }}"
+      target="_blank"
+      rel="noopener"
+      >Imprimir recibo (PDF)</a
+    >
+  </p>
+  {% endif %} {% if deuda > 0 %}
+  <form method="post" class="form-columna" autocomplete="off">
+    {{ csrf_field() }}
+    <label for="monto">Monto (B/.)</label>
+    <input
+      id="monto"
+      name="monto"
+      inputmode="decimal"
+      required
+      value="{{ deuda | dinero }}"
+    />
+    <label for="forma">Forma de pago</label>
+    <select id="forma" name="forma">
+      {% for clave, nombre in formas.items() %}
+      <option value="{{ clave }}">{{ nombre }}</option>
+      {% endfor %}
+    </select>
+    <label for="referencia">Autorización (tarjeta o Yappy)</label>
+    <input id="referencia" name="referencia" maxlength="12" />
+    <button class="btn btn-aceptar" type="submit">Registrar abono</button>
+  </form>
+  {% else %}
+  <p class="vacio">El cliente no tiene saldo pendiente.</p>
+  {% endif %} {% if historial %}
+  <h2>Abonos anteriores</h2>
+  <table class="tabla">
+    <thead>
+      <tr>
+        <th>Recibo</th>
+        <th>Fecha</th>
+        <th>Forma</th>
+        <th class="num">Monto</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for a in historial %}
+      <tr>
+        <td>{{ '%06d' % a.recibo }}</td>
+        <td>{{ a.fecha | fecha }}</td>
+        <td>{{ formas_pago_nombre(a.forma) }}</td>
+        <td class="num">{{ a.monto | dinero }}</td>
+        <td>
+          <a
+            class="enlace"
+            href="{{ url_for('caja.recibo', aid=a.id) }}"
+            target="_blank"
+            rel="noopener"
+            >Recibo</a
+          >
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+  <p>
+    <a class="btn btn-gris" href="{{ url_for('catalogos.clientes') }}"
+      >← Clientes</a
+    >
+  </p>
+</section>
+{% endblock %}

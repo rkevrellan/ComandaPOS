@@ -75,6 +75,17 @@ class Operador(UserMixin, db.Model):
     version_sesion = db.Column(db.Integer, nullable=False, default=1)
     creado = db.Column(db.DateTime, nullable=False, default=ahora)
     ultimo_acceso = db.Column(db.DateTime)
+    #: Verificación en dos pasos (TOTP). El secreto pendiente vive aquí, nunca en la cookie.
+    totp_secreto = db.Column(db.String(64))
+    totp_pendiente = db.Column(db.String(64))
+    totp_ultimo_paso = db.Column(db.Integer)
+    codigos_recuperacion = db.Column(
+        db.Text
+    )  # JSON con hashes; cada código sirve una sola vez
+
+    @property
+    def tiene_2fa(self) -> bool:
+        return bool(self.totp_secreto)
 
     def get_id(self) -> str:
         return f"{self.id}:{self.version_sesion}"
@@ -152,8 +163,11 @@ class AreaProduccion(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     codigo = db.Column(db.Integer, unique=True, nullable=False)
     descripcion = db.Column(db.String(40), nullable=False)
-    impresora = db.Column(db.String(120))
+    impresora = db.Column(db.String(120))  # (fase 1, sin uso: ver impresora_id)
+    impresora_id = db.Column(db.Integer, db.ForeignKey("impresoras.id"))
     activa = db.Column(db.Boolean, nullable=False, default=True)
+
+    impresora_obj = db.relationship("Impresora")
 
 
 class Seccion(db.Model):
@@ -190,6 +204,8 @@ class Producto(db.Model):
     aplica_jubilado = db.Column(db.Boolean, nullable=False, default=True)
     con_acompanamiento = db.Column(db.Boolean, nullable=False, default=False)
     agotado = db.Column(db.Boolean, nullable=False, default=False)
+    #: True si lo agotó el inventario (se reactiva solo al entrar mercancía); False si fue manual.
+    agotado_auto = db.Column(db.Boolean, nullable=False, default=False)
     condicion = db.Column(db.String(12), nullable=False, default="activo_sinv")
     imagen = db.Column(db.String(64))
     creado = db.Column(db.DateTime, nullable=False, default=ahora)
@@ -511,8 +527,176 @@ class Documento(db.Model):
     #: {"7": ["17.90", "1.25"], …}: base e ITBMS por tasa, como texto exacto.
     impuestos = db.Column(db.Text, nullable=False, default="{}")
     cufe = db.Column(db.String(80), unique=True, nullable=False)
+    #: simulado | autorizado | contingencia | rechazado
     estado = db.Column(db.String(12), nullable=False, default="simulado")
     emitido_en = db.Column(db.DateTime, nullable=False, default=ahora)
+    #: Detalle congelado (lista de ítems) y formas de pago: el documento no depende de la comanda.
+    detalle = db.Column(db.Text, nullable=False, default="[]")
+    protocolo = db.Column(db.String(60))
+    autorizado_en = db.Column(db.DateTime)
+    qr = db.Column(db.Text)
+    intentos = db.Column(db.Integer, nullable=False, default=0)
+    mensaje = db.Column(db.String(200))
 
     cuenta = db.relationship("Cuenta")
     cajero = db.relationship("Operador")
+
+    tipo_nombre = "Factura de operación interna"
+
+
+class NotaCredito(db.Model):
+    """Corrige un comprobante ya emitido (total o parcial). Un documento autorizado nunca se edita."""
+
+    __tablename__ = "notas_credito"
+    id = db.Column(db.Integer, primary_key=True)
+    numero = db.Column(db.Integer, unique=True, nullable=False)
+    documento_id = db.Column(
+        db.Integer, db.ForeignKey("documentos.id"), nullable=False, index=True
+    )
+    turno_id = db.Column(db.Integer, db.ForeignKey("turnos.id"))
+    solicitante_id = db.Column(
+        db.Integer, db.ForeignKey("operadores.id"), nullable=False
+    )
+    autorizador_id = db.Column(
+        db.Integer, db.ForeignKey("operadores.id"), nullable=False
+    )
+    motivo = db.Column(db.String(200), nullable=False)
+    forma_devolucion = db.Column(db.String(12), nullable=False, default="efectivo")
+    subtotal = db.Column(Dinero, nullable=False)
+    descuento_producto = db.Column(Dinero, nullable=False, default=Decimal("0.00"))
+    descuento_jubilado = db.Column(Dinero, nullable=False, default=Decimal("0.00"))
+    itbms = db.Column(Dinero, nullable=False)
+    total = db.Column(Dinero, nullable=False)
+    impuestos = db.Column(db.Text, nullable=False, default="{}")
+    detalle = db.Column(db.Text, nullable=False, default="[]")
+    cufe = db.Column(db.String(80), unique=True, nullable=False)
+    estado = db.Column(db.String(12), nullable=False, default="simulado")
+    protocolo = db.Column(db.String(60))
+    autorizado_en = db.Column(db.DateTime)
+    qr = db.Column(db.Text)
+    intentos = db.Column(db.Integer, nullable=False, default=0)
+    mensaje = db.Column(db.String(200))
+    emitido_en = db.Column(db.DateTime, nullable=False, default=ahora)
+
+    documento = db.relationship("Documento", backref="notas_credito")
+    solicitante = db.relationship("Operador", foreign_keys=[solicitante_id])
+    autorizador = db.relationship("Operador", foreign_keys=[autorizador_id])
+
+    tipo_nombre = "Nota de crédito"
+    receptor_ruc = property(lambda self: self.documento.receptor_ruc)
+    receptor_dv = property(lambda self: self.documento.receptor_dv)
+    receptor_nombre = property(lambda self: self.documento.receptor_nombre)
+
+
+# --------------------------------------------------------------------------- impresión (fase 3)
+TIPOS_IMPRESORA = {
+    "red": "Red (IP:puerto 9100)",
+    "windows": "Impresora de Windows",
+    "archivo": "Archivo (demostración)",
+}
+
+
+class Impresora(db.Model):
+    __tablename__ = "impresoras"
+    id = db.Column(db.Integer, primary_key=True)
+    nombre = db.Column(db.String(40), unique=True, nullable=False)
+    tipo = db.Column(db.String(10), nullable=False, default="archivo")
+    destino = db.Column(db.String(200), nullable=False, default="")
+    columnas = db.Column(db.Integer, nullable=False, default=42)
+    activa = db.Column(db.Boolean, nullable=False, default=True)
+
+
+class TrabajoImpresion(db.Model):
+    """Cola persistente: si la impresora falla, el trabajo queda y se reintenta (nunca se pierde una comanda)."""
+
+    __tablename__ = "trabajos_impresion"
+    id = db.Column(db.Integer, primary_key=True)
+    impresora_id = db.Column(db.Integer, db.ForeignKey("impresoras.id"))
+    descripcion = db.Column(db.String(120), nullable=False)
+    contenido = db.Column(db.LargeBinary, nullable=False)
+    estado = db.Column(
+        db.String(10), nullable=False, default="pendiente"
+    )  # pendiente | impreso | error
+    intentos = db.Column(db.Integer, nullable=False, default=0)
+    error = db.Column(db.String(200))
+    creado = db.Column(db.DateTime, nullable=False, default=ahora)
+    impreso_en = db.Column(db.DateTime)
+
+    impresora = db.relationship("Impresora")
+
+
+# --------------------------------------------------------------------------- inventario (fase 6)
+class Insumo(db.Model):
+    __tablename__ = "insumos"
+    id = db.Column(db.Integer, primary_key=True)
+    codigo = db.Column(db.Integer, unique=True, nullable=False)
+    nombre = db.Column(db.String(60), unique=True, nullable=False)
+    unidad = db.Column(db.String(10), nullable=False, default="unid")
+    existencia = db.Column(Cantidad, nullable=False, default=Decimal("0.000"))
+    minimo = db.Column(Cantidad, nullable=False, default=Decimal("0.000"))
+    activo = db.Column(db.Boolean, nullable=False, default=True)
+
+    @property
+    def bajo(self) -> bool:
+        return self.existencia <= self.minimo
+
+
+class RecetaItem(db.Model):
+    __tablename__ = "recetas"
+    id = db.Column(db.Integer, primary_key=True)
+    producto_id = db.Column(
+        db.Integer, db.ForeignKey("productos.id"), nullable=False, index=True
+    )
+    insumo_id = db.Column(db.Integer, db.ForeignKey("insumos.id"), nullable=False)
+    cantidad = db.Column(Cantidad, nullable=False)
+
+    producto = db.relationship("Producto", backref="receta")
+    insumo = db.relationship("Insumo")
+
+    __table_args__ = (
+        db.UniqueConstraint("producto_id", "insumo_id", name="uq_receta"),
+        db.CheckConstraint("cantidad > 0", name="ck_receta_cantidad"),
+    )
+
+
+class MovimientoInventario(db.Model):
+    __tablename__ = "movimientos_inventario"
+    id = db.Column(db.Integer, primary_key=True)
+    insumo_id = db.Column(
+        db.Integer, db.ForeignKey("insumos.id"), nullable=False, index=True
+    )
+    tipo = db.Column(
+        db.String(10), nullable=False
+    )  # entrada | salida | reverso | ajuste
+    cantidad = db.Column(Cantidad, nullable=False)  # con signo
+    referencia = db.Column(db.String(80), nullable=False, default="")
+    linea_id = db.Column(db.Integer, db.ForeignKey("lineas_pedido.id"))
+    operador_id = db.Column(db.Integer, db.ForeignKey("operadores.id"))
+    fecha = db.Column(db.DateTime, nullable=False, default=ahora)
+
+    insumo = db.relationship("Insumo")
+    operador = db.relationship("Operador")
+
+
+# --------------------------------------------------------------------------- crédito (fase 4)
+class Abono(db.Model):
+    """Pago a la cuenta de crédito de un cliente; reduce lo usado y emite un recibo."""
+
+    __tablename__ = "abonos"
+    id = db.Column(db.Integer, primary_key=True)
+    recibo = db.Column(db.Integer, unique=True, nullable=False)
+    cliente_id = db.Column(
+        db.Integer, db.ForeignKey("clientes.id"), nullable=False, index=True
+    )
+    turno_id = db.Column(db.Integer, db.ForeignKey("turnos.id"), nullable=False)
+    cajero_id = db.Column(db.Integer, db.ForeignKey("operadores.id"), nullable=False)
+    forma = db.Column(db.String(12), nullable=False)
+    monto = db.Column(Dinero, nullable=False)
+    referencia = db.Column(db.String(20))
+    fecha = db.Column(db.DateTime, nullable=False, default=ahora)
+
+    cliente = db.relationship("Cliente")
+    cajero = db.relationship("Operador")
+    turno = db.relationship("Turno")
+
+    __table_args__ = (db.CheckConstraint("monto > 0", name="ck_abono_monto"),)

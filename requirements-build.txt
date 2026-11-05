@@ -1,0 +1,6 @@
+# Solo para construir el instalador de Windows (build.bat). El sistema en sí usa requirements.txt.
+-r requirements.txt
+pyinstaller>=6.10
+pywebview>=5.3 ; sys_platform == "win32"
+pip-audit>=2.7
+bandit>=1.7.10

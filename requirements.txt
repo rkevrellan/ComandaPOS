@@ -1,7 +1,8 @@
 # ComandaPOS — compatible con Python 3.11 a 3.13 (recomendado 3.12 o superior en Windows).
 # Versiones mínimas sin vulnerabilidades conocidas (OWASP A06):
 #   Flask >= 3.1.1 · Werkzeug >= 3.1.3 · waitress >= 3.0.1 (CVE-2024-49768/49769)
-# En la fase 7 se fijan con hash (pip-compile --generate-hashes) para el instalador .exe.
+# build.bat verifica todo con pip-audit antes de empaquetar; para fijar versiones exactas con hash:
+#   pip-compile --generate-hashes requirements.txt  (pip-tools)
 Flask>=3.1.1
 Werkzeug>=3.1.3
 Flask-SQLAlchemy>=3.1.1
@@ -10,4 +11,6 @@ Flask-Login>=0.6.3
 waitress>=3.0.1
 # PDF de pre-cuenta y comprobante (con código QR incluido, sin dependencias extra)
 reportlab>=4.2
+# Credencial del PAC en el almacén seguro de Windows (Administrador de credenciales / DPAPI)
+keyring>=25.0 ; sys_platform == "win32"
 pytest>=8.0

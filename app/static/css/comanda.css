@@ -560,7 +560,7 @@ code {
 .pares dd {
   margin: 0;
   font-weight: 600;
-  word-break: break-all;
+  overflow-wrap: break-word; /* parte en espacios; nunca dentro de una palabra ni de un monto */
 }
 .estado-ok {
   color: #4ade80;
@@ -1425,3 +1425,77 @@ legend {
     grid-template-columns: repeat(3, 1fr);
   }
 }
+
+/* =====================================================================================
+   Fase final: administración, reportes, cuenta, documentos fiscales
+   ===================================================================================== */
+.menu-cabecera { display: flex; gap: .4rem; }
+.suave { color: var(--suave); font-weight: 500; font-size: .9rem; }
+.lista-simple { margin: .4rem 0; padding-left: 1.1rem; font-size: .9rem; }
+.tarjeta-alerta { border-color: var(--mal); }
+.chip.fiscal-autorizado { background: var(--ok); color: #fff; }
+.chip.fiscal-simulado { background: #0369a1; color: #fff; }
+.chip.fiscal-pendiente, .chip.fiscal-contingencia { background: #ca8a04; color: #1c1917; }
+.chip.fiscal-rechazado { background: var(--mal); color: #fff; }
+.mosaico { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: .8rem; margin-top: 1rem; }
+.mosaico-item { display: flex; flex-direction: column; gap: .3rem; min-height: 96px; padding: 1rem; border-radius: var(--radio);
+  background: var(--panel); border: 1px solid var(--borde); text-decoration: none; }
+.mosaico-item b { font-size: 1.05rem; color: #fde047; }
+.mosaico-item small { color: var(--suave); }
+.mosaico-item:active { transform: scale(.98); }
+.mosaico-item.destacado { border-color: var(--acento); }
+.acciones-fila { display: flex; gap: .6rem; align-items: center; }
+.acciones-fila form { margin: 0; }
+.ayuda { color: var(--suave); font-weight: 400; font-size: .78rem; }
+.form-rejilla .opcion-check { align-self: end; }
+.form-rejilla .fila-botones.ancho { grid-column: 1 / -1; }
+.form-receta { display: grid; gap: .5rem; max-width: 640px; }
+.fila-receta { display: grid; grid-template-columns: 1fr 160px; gap: .5rem; }
+.fila-receta select, .fila-receta input, .fila-mini input, .cant, .fila-botones select, label > input[type=date] {
+  min-height: 44px; padding: 0 .6rem; border-radius: 8px; border: 1px solid var(--borde); background: #0b1427; color: var(--texto); font: inherit; }
+.fila-mini { display: flex; gap: .35rem; align-items: center; }
+.fila-mini input { width: 110px; min-height: 40px; }
+tr.bajo td { background: rgba(220, 38, 38, .12); }
+.muestra-color { border-left: 14px solid transparent; padding-left: .4rem; }
+.trabajos { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: .8rem; }
+.trabajo { background: var(--panel); border: 1px solid var(--borde); border-radius: var(--radio); padding: .6rem; }
+.trabajo header { display: flex; justify-content: space-between; gap: .5rem; font-size: .85rem; }
+.trabajo header span { color: var(--suave); }
+.estado-trabajo-error { border-color: var(--mal); }
+pre.ticket { background: #f8fafc; color: #0f172a; border-radius: 8px; padding: .6rem; font: .78rem/1.3 Consolas, monospace; white-space: pre-wrap; max-height: 320px; overflow: auto; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: .6rem; margin: 1rem 0; }
+.kpi { background: var(--panel); border: 1px solid var(--borde); border-radius: var(--radio); padding: .7rem .9rem; }
+.kpi small { display: block; color: var(--suave); font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; }
+.kpi b { font-size: 1.35rem; }
+.barras { list-style: none; margin: 0; padding: 0; display: grid; gap: .45rem; }
+.barras li { display: grid; grid-template-columns: 140px 1fr 90px; gap: .6rem; align-items: center; font-size: .9rem; }
+.barras b { text-align: right; font-variant-numeric: tabular-nums; }
+.barras meter { width: 100%; height: 14px; }
+.csv { float: right; font-size: .8rem; }
+.calor { border-collapse: separate; border-spacing: 3px; font-size: .72rem; }
+.calor th { color: var(--suave); font-weight: 500; padding: 0 .2rem; }
+.calor td { width: 30px; height: 22px; border-radius: 4px; background: #1e293b; }
+.calor td.nivel-1 { background: #713f12; } .calor td.nivel-2 { background: #a16207; }
+.calor td.nivel-3 { background: #ea580c; } .calor td.nivel-4 { background: #f97316; }
+.qr-2fa { background: #fff; display: inline-block; padding: .6rem; border-radius: 10px; }
+.pasos { padding-left: 1.2rem; }
+.codigos { display: grid; grid-template-columns: repeat(2, 1fr); gap: .4rem; list-style: none; padding: 0; font-size: 1.15rem; }
+.form-columna.ancha { max-width: none; }
+.cant { width: 90px; }
+
+.form-rejilla label.opcion-check { display: flex; flex-direction: row; font-weight: 600; }
+.form-rejilla .opcion-check input { min-height: 0; padding: 0; flex: 0 0 auto; }
+.form-rejilla .fila-botones.ancho { display: flex; justify-content: flex-end; gap: .6rem; }
+.form-rejilla .fila-botones.ancho .btn { flex: 0 0 auto; min-width: 170px; }
+.form-rejilla input.selector-color { padding: 4px; cursor: pointer; }
+
+/* Configuración: los campos nunca se salen de su tarjeta */
+.tarjetas > .tarjeta { min-width: 0; }
+.form-columna input, .form-columna select { width: 100%; max-width: 100%; box-sizing: border-box; }
+.form-columna .opcion-check input,
+.form-rejilla .opcion-check input { width: 22px; height: 22px; min-height: 0; padding: 0; flex: 0 0 auto; }
+
+/* Botón principal «corto» dentro de una fila: ancho natural, no toda la fila */
+.fila-botones .btn-aceptar.corto { width: auto; min-width: 180px; }
+
+.pares dd code { overflow-wrap: anywhere; } /* el CUFE es una sola «palabra» de 60+ caracteres */

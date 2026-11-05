@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 
 from flask import Blueprint, current_app, render_template
-from sqlalchemy import func, inspect
+from sqlalchemy import func, inspect, select, table
 
 from ..config import NOMBRE_ROL
 from ..extensions import db
@@ -22,7 +22,9 @@ def inicio():
     motor = db.engine
     tablas = []
     for nombre in sorted(inspect(motor).get_table_names()):
-        total = db.session.execute(db.text(f'SELECT COUNT(*) FROM "{nombre}"')).scalar()
+        total = db.session.execute(
+            select(func.count()).select_from(table(nombre))  # el nombre se cita, no se concatena
+        ).scalar()
         tablas.append((nombre, total))
     ruta_bd = motor.url.database or ""
     # En modo WAL los cambios recientes viven en «-wal»: se suman para dar el tamaño real.

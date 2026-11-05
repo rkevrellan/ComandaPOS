@@ -1,18 +1,20 @@
-"""Caja: turnos, cobro con multipago y emisión del comprobante.
+"""Caja: turnos, cobro con multipago, comprobantes, notas de crédito, abonos a crédito y gaveta.
 
 RN-09  Un pago no excede el saldo salvo en efectivo (la diferencia es vuelto). Las formas que no
        son efectivo no pueden pasar del total, y entre todas deben cubrirlo EXACTO.
 RN-10  Crédito solo a clientes «crédito» o «autorizado», activos y con límite disponible.
 RN-11  No se cobra una cuenta con líneas sin enviar.
 RN-13  Cierre de turno con arqueo: la diferencia se justifica si pasa del umbral.
+RN-16  Una nota de crédito no puede devolver más de lo que queda por acreditar de cada ítem ni del
+       total del comprobante; requiere supervisor y motivo.
 Tarjetas: se guarda solo el código de autorización (nunca el número de la tarjeta).
 """
 
 from __future__ import annotations
 
-import hashlib
 import json
 import re
+import secrets
 from decimal import Decimal
 
 from sqlalchemy import func
@@ -20,21 +22,44 @@ from sqlalchemy import func
 from ..extensions import db
 from ..models import (
     FORMAS_PAGO,
+    Abono,
     Cliente,
     Cuenta,
     Documento,
+    NotaCredito,
     Operador,
     Pago,
     Turno,
     ahora,
 )
-from . import configuracion, secuencias
+from . import secuencias
 from .auditoria import auditar
-from .calculos import ReglaNegocioError, redondear, validar_precio
+from .calculos import (
+    LineaCalculo,
+    ReglaNegocioError,
+    calcular_linea,
+    redondear,
+    validar_cantidad,
+    validar_precio,
+)
 from .pedidos import actualizar_mesa, totales
 
 UMBRAL_DIFERENCIA = Decimal("1.00")
+CERO = Decimal("0.00")
 _REFERENCIA = re.compile(r"^[A-Za-z0-9-]{4,12}$")
+FORMAS_CON_REFERENCIA = ("visa", "mastercard", "clave", "yappy")
+
+
+def _dinero_sql(valor) -> Decimal:
+    """SUM conserva el tipo Dinero (llega en balboas); por si acaso, acepta centavos enteros."""
+    if isinstance(valor, Decimal):
+        return valor.quantize(Decimal("0.01"))
+    return (Decimal(int(valor or 0)) / 100).quantize(Decimal("0.01"))
+
+
+def codigo_provisional(prefijo: str, numero: int) -> str:
+    """Identificador único mientras el PAC no devuelve el CUFE (nunca se presenta como CUFE)."""
+    return f"{prefijo}-{numero:010d}-{secrets.token_hex(4).upper()}"
 
 
 # --------------------------------------------------------------------------- turnos
@@ -59,28 +84,41 @@ def abrir_turno(cajero: Operador, fondo) -> Turno:
 
 
 def resumen(turno: Turno) -> dict:
-    por_forma = {f: Decimal("0.00") for f in FORMAS_PAGO}
-    vueltos = Decimal("0.00")
+    por_forma = {f: CERO for f in FORMAS_PAGO}
     for p in turno.pagos:
         por_forma[p.forma] += p.monto
-        vueltos += p.vuelto
+    abonos = {f: CERO for f in FORMAS_PAGO}
+    for a in Abono.query.filter_by(turno_id=turno.id):
+        abonos[a.forma] += a.monto
+    devoluciones = {f: CERO for f in FORMAS_PAGO}
+    notas = NotaCredito.query.filter_by(turno_id=turno.id).all()
+    for nc in notas:
+        devoluciones[nc.forma_devolucion] += nc.total
     documentos = (
         Documento.query.join(Pago, Pago.cuenta_id == Documento.cuenta_id)
         .filter(Pago.turno_id == turno.id)
         .distinct()
         .all()
     )
-    total = sum(por_forma.values(), Decimal("0.00"))
-    itbms = sum((d.itbms for d in documentos), Decimal("0.00"))
-    jubilado = sum((d.descuento_jubilado for d in documentos), Decimal("0.00"))
+    ventas = sum(por_forma.values(), CERO)
+    itbms = sum((d.itbms for d in documentos), CERO) - sum(
+        (nc.itbms for nc in notas), CERO
+    )
     return {
         "por_forma": por_forma,
-        "total": total,
+        "abonos": abonos,
+        "devoluciones": devoluciones,
+        "total": ventas,
+        "total_neto": ventas - sum(devoluciones.values(), CERO),
         "documentos": len(documentos),
+        "notas_credito": len(notas),
         "itbms": itbms,
-        "descuento_jubilado": jubilado,
+        "descuento_jubilado": sum((d.descuento_jubilado for d in documentos), CERO),
         # El monto aplicado en efectivo ya es neto (recibido − vuelto).
-        "efectivo_esperado": turno.fondo + por_forma["efectivo"],
+        "efectivo_esperado": turno.fondo
+        + por_forma["efectivo"]
+        + abonos["efectivo"]
+        - devoluciones["efectivo"],
     }
 
 
@@ -109,17 +147,74 @@ def cerrar_turno(turno: Turno, cajero: Operador, contado, justificacion: str) ->
     return turno
 
 
+def abrir_gaveta(cajero: Operador, motivo: str) -> None:
+    """Apertura sin venta: solo cajero o superior, con motivo; queda auditada."""
+    motivo = " ".join((motivo or "").split())[:120]
+    if len(motivo) < 5:
+        raise ReglaNegocioError("Escribe el motivo para abrir la gaveta.")
+    if turno_abierto() is None:
+        raise ReglaNegocioError("No hay un turno abierto.")
+    auditar("gaveta_sin_venta", motivo, operador=cajero)
+
+
 # --------------------------------------------------------------------------- crédito
 def credito_usado(cliente: Cliente) -> Decimal:
-    usado = (
+    cargado = (
         db.session.query(func.coalesce(func.sum(Pago.monto), 0))
         .join(Cuenta, Cuenta.id == Pago.cuenta_id)
         .filter(Cuenta.cliente_id == cliente.id, Pago.forma == "credito")
         .scalar()
     )
-    if isinstance(usado, Decimal):  # SUM conserva el tipo Dinero y ya llega en balboas
-        return usado.quantize(Decimal("0.01"))
-    return (Decimal(int(usado or 0)) / 100).quantize(Decimal("0.01"))
+    abonado = (
+        db.session.query(func.coalesce(func.sum(Abono.monto), 0))
+        .filter(Abono.cliente_id == cliente.id)
+        .scalar()
+    )
+    devuelto = (
+        db.session.query(func.coalesce(func.sum(NotaCredito.total), 0))
+        .join(Documento, Documento.id == NotaCredito.documento_id)
+        .join(Cuenta, Cuenta.id == Documento.cuenta_id)
+        .filter(
+            Cuenta.cliente_id == cliente.id, NotaCredito.forma_devolucion == "credito"
+        )
+        .scalar()
+    )
+    return _dinero_sql(cargado) - _dinero_sql(abonado) - _dinero_sql(devuelto)
+
+
+def abonar(
+    cliente: Cliente, monto, forma: str, referencia: str, cajero: Operador
+) -> Abono:
+    turno = turno_abierto()
+    if turno is None:
+        raise ReglaNegocioError("No hay un turno de caja abierto.")
+    if forma not in FORMAS_PAGO or forma == "credito":
+        raise ReglaNegocioError("Forma de pago no válida para un abono.")
+    monto = validar_precio(monto, "monto del abono")
+    deuda = credito_usado(cliente)
+    if deuda <= 0:
+        raise ReglaNegocioError("Ese cliente no tiene saldo pendiente.")
+    if monto > deuda:
+        raise ReglaNegocioError(
+            f"El saldo pendiente es B/. {deuda:,.2f}; el abono no puede pasarlo."
+        )
+    referencia = (referencia or "").strip()
+    if forma in FORMAS_CON_REFERENCIA and not _REFERENCIA.match(referencia):
+        raise ReglaNegocioError(
+            "Escribe el código de autorización (4 a 12 letras o números)."
+        )
+    abono = Abono(
+        recibo=secuencias.siguiente("recibo"),
+        cliente=cliente,
+        turno=turno,
+        cajero_id=cajero.id,
+        forma=forma,
+        monto=monto,
+        referencia=referencia if forma in FORMAS_CON_REFERENCIA else None,
+    )
+    db.session.add(abono)
+    auditar("abono", f"{cliente.ruc}: B/. {monto} ({forma}), recibo {abono.recibo}")
+    return abono
 
 
 # --------------------------------------------------------------------------- cobro
@@ -135,7 +230,7 @@ def _leer_pagos(datos) -> dict:
         if monto == 0:
             continue
         referencia = (datos.get(forma + "_ref") or "").strip()
-        if forma in ("visa", "mastercard", "clave", "yappy"):
+        if forma in FORMAS_CON_REFERENCIA:
             if (
                 referencia.replace(" ", "").replace("-", "").isdigit()
                 and len(referencia) > 12
@@ -173,8 +268,8 @@ def cobrar(cuenta: Cuenta, datos, cajero: Operador) -> Documento:
     t = totales(cuenta)
     total = t.total
     pagos = _leer_pagos(datos)
-    efectivo = pagos.pop("efectivo", (Decimal("0.00"), ""))[0]
-    no_efectivo = sum((m for m, _ in pagos.values()), Decimal("0.00"))
+    efectivo = pagos.pop("efectivo", (CERO, ""))[0]
+    no_efectivo = sum((m for m, _ in pagos.values()), CERO)
     if no_efectivo > total:
         raise ReglaNegocioError(
             "Las tarjetas, Yappy y crédito no pueden pasar del total."
@@ -205,19 +300,7 @@ def cobrar(cuenta: Cuenta, datos, cajero: Operador) -> Documento:
             )
 
     momento = ahora()
-    if falta > 0:
-        db.session.add(
-            Pago(
-                cuenta=cuenta,
-                turno=turno,
-                cajero_id=cajero.id,
-                forma="efectivo",
-                monto=falta,
-                recibido=efectivo,
-                vuelto=vuelto,
-                fecha=momento,
-            )
-        )
+    registro_pagos = []
     for forma, (monto, referencia) in pagos.items():
         db.session.add(
             Pago(
@@ -231,8 +314,39 @@ def cobrar(cuenta: Cuenta, datos, cajero: Operador) -> Documento:
                 fecha=momento,
             )
         )
+        registro_pagos.append(
+            {
+                "forma": forma,
+                "monto": str(monto),
+                "recibido": str(monto),
+                "vuelto": "0.00",
+                "referencia": referencia,
+            }
+        )
+    if falta > 0:  # el efectivo va al final (como en el comprobante)
+        db.session.add(
+            Pago(
+                cuenta=cuenta,
+                turno=turno,
+                cajero_id=cajero.id,
+                forma="efectivo",
+                monto=falta,
+                recibido=efectivo,
+                vuelto=vuelto,
+                fecha=momento,
+            )
+        )
+        registro_pagos.append(
+            {
+                "forma": "efectivo",
+                "monto": str(falta),
+                "recibido": str(efectivo),
+                "vuelto": str(vuelto),
+                "referencia": "",
+            }
+        )
 
-    documento = emitir(cuenta, t, cajero)
+    documento = emitir(cuenta, t, cajero, registro_pagos)
     cuenta.estado = "pagada"
     cuenta.pagada_en = momento
     comanda = cuenta.comanda
@@ -240,16 +354,43 @@ def cobrar(cuenta: Cuenta, datos, cajero: Operador) -> Documento:
         comanda.estado = "cerrada"
         comanda.cerrada_en = momento
     actualizar_mesa(comanda)
+    formas = ", ".join(p["forma"] for p in registro_pagos)
     auditar(
         "cobro",
-        f"comanda {comanda.numero}, cuenta {cuenta.numero}: B/. {total} "
-        f"({', '.join(sorted(['efectivo'] if falta else []) + sorted(pagos))}), comprobante {documento.numero}",
+        f"comanda {comanda.numero}, cuenta {cuenta.numero}: B/. {total} ({formas}), "
+        f"comprobante {documento.numero}",
     )
     return documento
 
 
-def emitir(cuenta: Cuenta, t, cajero: Operador) -> Documento:
-    """Comprobante de la cuenta. Fase 5: aquí se llamará al PAC para obtener el CUFE real."""
+def _items_de(cuenta: Cuenta, t) -> list:
+    salida = []
+    for ln, r in zip(cuenta.activas, t.lineas):
+        pct = (
+            (r.descuento * 100 / r.bruto).quantize(Decimal("0.01")) if r.bruto else CERO
+        )
+        salida.append(
+            {
+                "codigo": ln.producto.codigo if ln.producto else 0,
+                "descripcion": ln.descripcion,
+                "acompanamiento": ln.acompanamiento or "",
+                "cantidad": str(ln.cantidad.normalize()),
+                "precio": str(ln.precio),
+                "bruto": str(r.bruto),
+                "descuento": str(r.descuento),
+                "descuento_pct": str(ln.descuento_pct if not r.es_jubilado else pct),
+                "es_jubilado": r.es_jubilado,
+                "base": str(r.base),
+                "tasa": r.tasa,
+                "itbms": str(r.itbms),
+                "total": str(r.total),
+            }
+        )
+    return salida
+
+
+def emitir(cuenta: Cuenta, t, cajero: Operador, registro_pagos: list) -> Documento:
+    """Crea el comprobante con su detalle congelado. La autorización del PAC va DESPUÉS de confirmar."""
     if cuenta.cliente is not None:
         ruc, dv, nombre = cuenta.cliente.ruc, cuenta.cliente.dv, cuenta.cliente.nombre
     else:
@@ -260,13 +401,15 @@ def emitir(cuenta: Cuenta, t, cajero: Operador) -> Documento:
         str(tasa): [str(t.base_por_tasa[tasa]), str(t.itbms_por_tasa[tasa])]
         for tasa in sorted(t.base_por_tasa)
     }
-    huella = (
-        hashlib.sha256(
-            f"{configuracion.obtener('emisor.ruc')}|{numero}|{t.total}|{ahora().isoformat()}".encode()
-        )
-        .hexdigest()[:40]
-        .upper()
-    )
+    detalle = {
+        "items": _items_de(cuenta, t),
+        "pagos": registro_pagos,
+        "jubilado": (
+            {"cedula": cuenta.jubilado_cedula, "nombre": cuenta.jubilado_nombre}
+            if cuenta.jubilado_cedula
+            else None
+        ),
+    }
     documento = Documento(
         numero=numero,
         cuenta=cuenta,
@@ -280,11 +423,152 @@ def emitir(cuenta: Cuenta, t, cajero: Operador) -> Documento:
         itbms=t.itbms,
         total=t.total,
         impuestos=json.dumps(impuestos),
-        cufe=f"DEMO-{huella}",
-        estado="simulado",
+        detalle=json.dumps(detalle, ensure_ascii=False),
+        cufe=codigo_provisional("PEND", numero),
+        estado="pendiente",
     )
     db.session.add(documento)
     return documento
+
+
+# --------------------------------------------------------------------------- notas de crédito
+def acreditado_por_item(doc: Documento) -> dict:
+    """Cantidad ya acreditada de cada ítem del comprobante (por notas de crédito anteriores)."""
+    from .fiscal import items as items_de
+
+    ya = {}
+    for nc in doc.notas_credito:
+        for it in items_de(nc):
+            ya[it["indice"]] = ya.get(it["indice"], Decimal("0")) + Decimal(it["cantidad"])
+    return ya
+
+
+def nota_credito(
+    doc: Documento,
+    cantidades: dict,
+    motivo: str,
+    forma_devolucion: str,
+    solicitante: Operador,
+    autorizador: Operador,
+) -> NotaCredito:
+    """RN-16. `cantidades` = {índice del ítem: cantidad a acreditar}."""
+    from .fiscal import items as items_de
+
+    if doc.estado not in ("autorizado", "simulado"):
+        raise ReglaNegocioError(
+            "Solo se acredita un comprobante ya autorizado por el PAC."
+        )
+    turno = turno_abierto()
+    if turno is None:
+        raise ReglaNegocioError("No hay un turno de caja abierto.")
+    motivo = " ".join((motivo or "").split())[:200]
+    if len(motivo) < 10:
+        raise ReglaNegocioError(
+            "Explica el motivo de la nota de crédito (mínimo 10 caracteres)."
+        )
+    if forma_devolucion not in FORMAS_PAGO:
+        raise ReglaNegocioError("Forma de devolución no válida.")
+    if forma_devolucion == "credito" and (doc.cuenta.cliente is None):
+        raise ReglaNegocioError("Solo se devuelve a crédito a un cliente registrado.")
+    originales = items_de(doc)
+    ya = acreditado_por_item(doc)
+    seleccion = []
+    for indice, cantidad in cantidades.items():
+        if not (0 <= indice < len(originales)):
+            raise ReglaNegocioError("Ítem desconocido.")
+        cantidad = validar_cantidad(cantidad)
+        it = originales[indice]
+        restante = Decimal(it["cantidad"]) - ya.get(indice, Decimal("0"))
+        if cantidad > restante:
+            raise ReglaNegocioError(
+                f"De «{it['descripcion']}» solo quedan {restante.normalize()} por acreditar."
+            )
+        seleccion.append((indice, it, cantidad))
+    if not seleccion:
+        raise ReglaNegocioError("Elige al menos un producto para la nota de crédito.")
+
+    detalle, subtotal, desc_prd, desc_jub, itbms, total, impuestos = (
+        [],
+        CERO,
+        CERO,
+        CERO,
+        CERO,
+        CERO,
+        {},
+    )
+    for indice, it, cantidad in seleccion:
+        if cantidad == Decimal(it["cantidad"]) and indice not in ya:
+            bruto, descuento, base = (
+                Decimal(it["bruto"]),
+                Decimal(it["descuento"]),
+                Decimal(it["base"]),
+            )
+            imp, tot = Decimal(it["itbms"]), Decimal(it["total"])
+        else:
+            r = calcular_linea(
+                LineaCalculo.crear(
+                    cantidad, it["precio"], it["tasa"], it["descuento_pct"], False
+                )
+            )
+            bruto, descuento, base, imp, tot = (
+                r.bruto,
+                r.descuento,
+                r.base,
+                r.itbms,
+                r.total,
+            )
+        detalle.append(
+            dict(
+                it,
+                indice=indice,
+                cantidad=str(cantidad.normalize()),
+                bruto=str(bruto),
+                descuento=str(descuento),
+                base=str(base),
+                itbms=str(imp),
+                total=str(tot),
+            )
+        )
+        subtotal += bruto
+        if it.get("es_jubilado"):
+            desc_jub += descuento
+        else:
+            desc_prd += descuento
+        itbms += imp
+        total += tot
+        b, i = impuestos.get(str(it["tasa"]), (CERO, CERO))
+        impuestos[str(it["tasa"])] = (b + base, i + imp)
+    previas = sum((nc.total for nc in doc.notas_credito), CERO)
+    if total + previas > doc.total:
+        raise ReglaNegocioError("La nota de crédito pasaría del total del comprobante.")
+
+    numero = secuencias.siguiente("nota_credito")
+    nc = NotaCredito(
+        numero=numero,
+        documento=doc,
+        turno_id=turno.id,
+        solicitante_id=solicitante.id,
+        autorizador_id=autorizador.id,
+        motivo=motivo,
+        forma_devolucion=forma_devolucion,
+        subtotal=subtotal,
+        descuento_producto=desc_prd,
+        descuento_jubilado=desc_jub,
+        itbms=itbms,
+        total=total,
+        impuestos=json.dumps({k: [str(b), str(i)] for k, (b, i) in impuestos.items()}),
+        detalle=json.dumps({"items": detalle}, ensure_ascii=False),
+        cufe=codigo_provisional("PNC", numero),
+        estado="pendiente",
+    )
+    db.session.add(nc)
+    auditar(
+        "nota_credito",
+        f"NC {numero} sobre FE {doc.numero}: B/. {total} ({forma_devolucion}). {motivo}",
+        operador=solicitante,
+        autorizador=autorizador,
+    )
+    return nc
 
 
 def redondeo_billete(total: Decimal) -> list:
@@ -302,3 +586,4 @@ def redondeo_billete(total: Decimal) -> list:
         if monto >= total and monto not in sugerencias:
             sugerencias.append(monto.quantize(Decimal("0.01")))
     return sugerencias[:4]
+

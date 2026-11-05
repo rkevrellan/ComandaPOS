@@ -26,6 +26,7 @@ contenido %}
           <th>Pago</th>
           <th class="num">Crédito disponible</th>
           <th>Estado</th>
+          <th></th>
         </tr>
       </thead>
       <tbody>
@@ -41,10 +42,17 @@ contenido %}
             '—' }}
           </td>
           <td>{{ 'Activo' if c.activo else 'Inactivo' }}</td>
+          <td>
+            {% if c.id in usado %}<a
+              class="enlace"
+              href="{{ url_for('caja.abono', cid=c.id) }}"
+              >Abonar</a
+            >{% endif %}
+          </td>
         </tr>
         {% else %}
         <tr>
-          <td colspan="7" class="vacio">Sin resultados.</td>
+          <td colspan="8" class="vacio">Sin resultados.</td>
         </tr>
         {% endfor %}
       </tbody>

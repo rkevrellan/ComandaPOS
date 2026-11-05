@@ -1,8 +1,10 @@
 .venv/
+.venv-build/
 __pycache__/
 *.pyc
 instance/
 .pytest_cache/
 build/
 dist/
-*.spec
+datos/
+*.log

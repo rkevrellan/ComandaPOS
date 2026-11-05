@@ -2,11 +2,105 @@
 contenido %}
 <div class="encabezado-pagina">
   <h1>Caja {{ '· turno ' ~ turno.numero if turno else '' }}</h1>
-  <a class="btn btn-gris" href="{{ url_for('mesas.control') }}">← Mesas</a>
+  <div class="fila-botones">
+    {% if turno %}<a
+      class="btn btn-gris"
+      href="{{ url_for('caja.corte_x') }}"
+      target="_blank"
+      rel="noopener"
+      >Corte X (PDF)</a
+    >{% endif %}
+    <a class="btn btn-gris" href="{{ url_for('catalogos.clientes') }}"
+      >Clientes y abonos</a
+    >
+    <a class="btn btn-gris" href="{{ url_for('mesas.control') }}">← Mesas</a>
+  </div>
+</div>
+
+<div class="tarjetas">
+  <section class="tarjeta {{ 'tarjeta-alerta' if folios.alerta else '' }}">
+    <h2>Facturación electrónica</h2>
+    <dl class="pares">
+      <dt>Folios disponibles</dt>
+      <dd>
+        {{ folios.disponibles if folios.disponibles is not none else '—' }} de
+        {{ folios.total or '—' }}
+      </dd>
+      <dt>Usados</dt>
+      <dd>{{ folios.usados }}</dd>
+      <dt>Pendientes de autorizar</dt>
+      <dd>{{ pendientes | length }}</dd>
+    </dl>
+    {% if folios.alerta %}
+    <p class="aviso aviso-error">Quedan pocos folios: compra más al PAC.</p>
+    {% endif %} {% if pendientes %}
+    <ul class="lista-simple">
+      {% for d in pendientes[:6] %}
+      <li>
+        {{ d.tipo_nombre }} {{ '%010d' % d.numero }} · {{ d.estado }} · {{
+        d.mensaje or '' }}
+      </li>
+      {% endfor %}
+    </ul>
+    <form method="post" action="{{ url_for('caja.reenviar') }}">
+      {{ csrf_field() }}<button class="btn" type="submit">
+        Reenviar al PAC
+      </button>
+    </form>
+    {% endif %}
+  </section>
+
+  <section class="tarjeta">
+    <h2>Impresión</h2>
+    <p>
+      Impresora de caja:
+      <b>{{ impresora_caja.nombre if impresora_caja else 'no configurada' }}</b>
+    </p>
+    {% if impresiones %}
+    <ul class="lista-simple">
+      {% for tr in impresiones[:6] %}
+      <li>
+        {{ tr.descripcion }} · <b>{{ tr.estado }}</b>{{ ' · ' ~ tr.error if
+        tr.error else '' }}
+      </li>
+      {% endfor %}
+    </ul>
+    <form method="post" action="{{ url_for('caja.reimprimir') }}">
+      {{ csrf_field() }}<button class="btn" type="submit">
+        Reintentar impresiones
+      </button>
+    </form>
+    {% else %}
+    <p class="vacio">Sin impresiones pendientes.</p>
+    {% endif %}
+  </section>
+
+  {% if turno %}
+  <section class="tarjeta">
+    <h2>Gaveta sin venta</h2>
+    <form
+      method="post"
+      action="{{ url_for('caja.gaveta') }}"
+      class="form-columna"
+      autocomplete="off"
+    >
+      {{ csrf_field() }}
+      <label for="motivo-gaveta">Motivo (queda en la auditoría)</label>
+      <input
+        id="motivo-gaveta"
+        name="motivo"
+        maxlength="120"
+        required
+        placeholder="Cambio de billetes"
+      />
+      <button class="btn" type="submit">Abrir gaveta</button>
+    </form>
+  </section>
+  {% endif %}
 </div>
 
 {% if not turno %}
-<section class="tarjeta tarjeta-centro">
+<section class="tarjeta tarjeta-centro separada">
   <h2>Abrir turno</h2>
   <p>
     Cuenta el fondo de la gaveta y escríbelo. Sin turno abierto no se puede
@@ -25,7 +119,7 @@ contenido %}
   </form>
 </section>
 {% else %}
-<div class="tarjetas">
+<div class="tarjetas separada">
   <section class="tarjeta">
     <h2>Turno {{ turno.numero }}</h2>
     <dl class="pares">
@@ -37,7 +131,9 @@ contenido %}
       <dd>B/. {{ turno.fondo | dinero }}</dd>
       <dt>Comprobantes</dt>
       <dd>{{ datos.documentos }}</dd>
-      <dt>ITBMS cobrado</dt>
+      <dt>Notas de crédito</dt>
+      <dd>{{ datos.notas_credito }}</dd>
+      <dt>ITBMS neto</dt>
       <dd>B/. {{ datos.itbms | dinero }}</dd>
       <dt>Desc. jubilados</dt>
       <dd>B/. {{ datos.descuento_jubilado | dinero }}</dd>
@@ -48,16 +144,24 @@ contenido %}
     <dl class="pares">
       {% for clave, nombre in formas.items() %}
       <dt>{{ nombre }}</dt>
-      <dd>B/. {{ datos.por_forma[clave] | dinero }}</dd>
+      <dd>
+        B/. {{ datos.por_forma[clave] | dinero }}{{ ' (−' ~
+        (datos.devoluciones[clave] | dinero) ~ ')' if datos.devoluciones[clave]
+        else '' }}
+      </dd>
       {% endfor %}
-      <dt><b>Total</b></dt>
+      <dt><b>Total ventas</b></dt>
       <dd><b>B/. {{ datos.total | dinero }}</b></dd>
+      <dt>Neto (− devoluciones)</dt>
+      <dd>B/. {{ datos.total_neto | dinero }}</dd>
+      <dt>Abonos recibidos</dt>
+      <dd>B/. {{ (datos.abonos.values() | sum) | dinero }}</dd>
     </dl>
   </section>
   <section class="tarjeta">
     <h2>Corte Z · cerrar turno</h2>
     <p>
-      Efectivo esperado en gaveta (fondo + efectivo):
+      Efectivo esperado en gaveta:
       <b>B/. {{ datos.efectivo_esperado | dinero }}</b>
     </p>
     <form
@@ -70,7 +174,7 @@ contenido %}
       <label for="contado">Efectivo contado (B/.)</label>
       <input id="contado" name="contado" inputmode="decimal" required />
       <label for="justificacion"
-        >Justificación (si hay diferencia mayor de B/. 1.00)</label
+        >Justificación (si la diferencia pasa de B/. 1.00)</label
       >
       <input id="justificacion" name="justificacion" maxlength="200" />
       <button class="btn peligro" type="submit">Cerrar turno</button>
@@ -84,6 +188,7 @@ contenido %}
           <th>Número</th>
           <th>Fecha</th>
           <th>Cliente</th>
+          <th>Estado</th>
           <th class="num">Total</th>
           <th></th>
         </tr>
@@ -91,9 +196,16 @@ contenido %}
       <tbody>
         {% for d in documentos %}
         <tr>
-          <td>{{ '%010d' % d.numero }}</td>
+          <td>
+            <a class="enlace" href="{{ url_for('salon.documento', did=d.id) }}"
+              >{{ '%010d' % d.numero }}</a
+            >
+          </td>
           <td>{{ d.emitido_en | fecha }}</td>
           <td>{{ d.receptor_nombre }}</td>
+          <td>
+            <span class="chip fiscal-{{ d.estado }}">{{ d.estado }}</span>
+          </td>
           <td class="num">{{ d.total | dinero }}</td>
           <td>
             <a
@@ -107,8 +219,31 @@ contenido %}
         </tr>
         {% else %}
         <tr>
-          <td colspan="5" class="vacio">
+          <td colspan="6" class="vacio">
             Todavía no hay cobros en este turno.
+          </td>
+        </tr>
+        {% endfor %} {% for nc in notas %}
+        <tr>
+          <td>
+            <a class="enlace" href="{{ url_for('salon.ver_nota', nid=nc.id) }}"
+              >NC {{ '%010d' % nc.numero }}</a
+            >
+          </td>
+          <td>{{ nc.emitido_en | fecha }}</td>
+          <td>{{ nc.receptor_nombre }}</td>
+          <td>
+            <span class="chip fiscal-{{ nc.estado }}">{{ nc.estado }}</span>
+          </td>
+          <td class="num">−{{ nc.total | dinero }}</td>
+          <td>
+            <a
+              class="enlace"
+              href="{{ url_for('salon.nota_pdf', nid=nc.id) }}"
+              target="_blank"
+              rel="noopener"
+              >Reimprimir</a
+            >
           </td>
         </tr>
         {% endfor %}
@@ -128,7 +263,7 @@ contenido %}
         <th class="num">Esperado</th>
         <th class="num">Contado</th>
         <th class="num">Diferencia</th>
-        <th>Justificación</th>
+        <th></th>
       </tr>
     </thead>
     <tbody>
@@ -140,7 +275,15 @@ contenido %}
         <td class="num">{{ tu.efectivo_esperado | dinero }}</td>
         <td class="num">{{ tu.efectivo_contado | dinero }}</td>
         <td class="num">{{ tu.diferencia | dinero }}</td>
-        <td>{{ tu.justificacion or '' }}</td>
+        <td>
+          <a
+            class="enlace"
+            href="{{ url_for('caja.corte_z', tid=tu.id) }}"
+            target="_blank"
+            rel="noopener"
+            >Corte Z</a
+          >
+        </td>
       </tr>
       {% endfor %}
     </tbody>

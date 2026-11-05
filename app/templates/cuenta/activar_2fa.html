@@ -1,0 +1,36 @@
+{% extends "base.html" %} {% block titulo %}Activar verificación en dos pasos{%
+endblock %} {% block contenido %}
+<section class="tarjeta tarjeta-centro">
+  <h1>Activar verificación en dos pasos</h1>
+  <ol class="pasos">
+    <li>Abre tu aplicación de autenticación y escanea este código.</li>
+    <li>Si no puedes escanear, escribe la clave a mano.</li>
+    <li>Escribe el código de 6 dígitos que muestra la aplicación.</li>
+  </ol>
+  <div class="qr-2fa">
+    <img
+      src="{{ qr }}"
+      width="180"
+      height="180"
+      alt="Código QR para la aplicación de autenticación"
+    />
+  </div>
+  <p>Clave: <code class="seleccionable">{{ secreto | batch(4) | map("join") | join(" ") }}</code></p>
+  <form method="post" class="form-columna" autocomplete="off">
+    {{ csrf_field() }}
+    <label for="codigo">Código de 6 dígitos</label>
+    <input
+      id="codigo"
+      name="codigo"
+      inputmode="numeric"
+      maxlength="6"
+      required
+      autofocus
+    />
+    <div class="fila-botones">
+      <a class="btn btn-gris" href="{{ url_for('cuenta.inicio') }}">Cancelar</a>
+      <button class="btn btn-aceptar" type="submit">Confirmar</button>
+    </div>
+  </form>
+</section>
+{% endblock %}

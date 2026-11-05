@@ -1,0 +1,119 @@
+{% extends "base.html" %} {% block titulo %}{{ 'Editar operador' if op else
+'Nuevo operador' }}{% endblock %} {% block contenido %}
+<div class="encabezado-pagina">
+  <h1>{{ 'Editar operador · ' ~ op.usuario if op else 'Nuevo operador' }}</h1>
+  <a class="btn btn-gris" href="{{ url_for('admin.operadores') }}"
+    >← Operadores</a
+  >
+</div>
+<div class="tarjetas">
+  <section class="tarjeta">
+    <h2>Datos</h2>
+    <form method="post" class="form-columna" autocomplete="off">
+      {{ csrf_field() }}
+      <label for="nombre">Nombre completo</label>
+      <input
+        id="nombre"
+        name="nombre"
+        maxlength="80"
+        required
+        value="{{ op.nombre if op else previo.get('nombre', '') }}"
+      />
+      <label for="cargo">Cargo</label>
+      <input
+        id="cargo"
+        name="cargo"
+        maxlength="40"
+        value="{{ op.cargo if op else previo.get('cargo', '') }}"
+      />
+      {% if not op %}
+      <label for="usuario">Usuario</label>
+      <input
+        id="usuario"
+        name="usuario"
+        maxlength="30"
+        required
+        autocapitalize="none"
+        value="{{ previo.get('usuario', '') }}"
+      />
+      {% endif %}
+      <label for="rol">Nivel de seguridad</label>
+      <select id="rol" name="rol">
+        {% for clave, nombre in roles.items() %} {% if (op and op.rol == clave)
+        or (not op and previo.get('rol') == clave) %}
+        <option value="{{ clave }}" selected>{{ nombre }}</option>
+        {% else %}
+        <option value="{{ clave }}">{{ nombre }}</option>
+        {% endif %} {% endfor %}
+      </select>
+      {% if op %}
+      <label class="opcion-check">
+        {% if op.activo %}<input
+          type="checkbox"
+          name="activo"
+          value="1"
+          checked
+        />{% else %}<input type="checkbox" name="activo" value="1" />{% endif %}
+        <span>Activo</span>
+      </label>
+      {% else %}
+      <label for="credencial"
+        >PIN (meseros y cajeros: 6 dígitos) o contraseña (10+ caracteres)</label
+      >
+      <input
+        id="credencial"
+        name="credencial"
+        type="password"
+        maxlength="128"
+        required
+      />
+      {% endif %}
+      <button class="btn btn-aceptar" type="submit">Grabar</button>
+    </form>
+  </section>
+  {% if op %}
+  <section class="tarjeta">
+    <h2>Seguridad</h2>
+    <form
+      method="post"
+      action="{{ url_for('admin.operador_accion', oid=op.id, accion='credencial') }}"
+      class="form-columna"
+      autocomplete="off"
+    >
+      {{ csrf_field() }}
+      <label for="nueva"
+        >Restablecer {{ 'PIN' if op.usa_pin else 'contraseña' }}</label
+      >
+      <input
+        id="nueva"
+        name="credencial"
+        type="password"
+        maxlength="128"
+        required
+      />
+      <button class="btn" type="submit">Restablecer</button>
+    </form>
+    <form
+      method="post"
+      action="{{ url_for('admin.operador_accion', oid=op.id, accion='sesiones') }}"
+      class="separada"
+    >
+      {{ csrf_field() }}<button class="btn" type="submit">
+        Cerrar sus sesiones abiertas
+      </button>
+    </form>
+    {% if op.tiene_2fa %}
+    <form
+      method="post"
+      action="{{ url_for('admin.operador_accion', oid=op.id, accion='dos_pasos') }}"
+      class="separada"
+    >
+      {{ csrf_field() }}<button class="btn peligro" type="submit">
+        Restablecer verificación en dos pasos
+      </button>
+    </form>
+    {% endif %}
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

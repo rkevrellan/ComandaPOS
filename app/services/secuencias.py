@@ -19,6 +19,7 @@ SECUENCIAS = {
     "factura": 0,
     "nota_credito": 0,
     "turno": 0,
+    "recibo": 0,
 }
 
 

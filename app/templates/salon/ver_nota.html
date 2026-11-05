@@ -1,0 +1,94 @@
+{% extends "base.html" %} {% block titulo %}Nota de crédito {{ '%010d' %
+nc.numero }}{% endblock %} {% block contenido %}
+<section class="tarjeta tarjeta-centro">
+  {% if leyenda %}
+  <p
+    class="aviso {{ 'aviso-error' if nc.estado != 'simulado' else 'aviso-info' }}"
+  >
+    {{ leyenda }}{{ ' · ' ~ nc.mensaje if nc.mensaje else '' }}
+  </p>
+  {% endif %}
+  <h1>
+    Nota de crédito {{ '%010d' % nc.numero }}
+    <small>{{ nc.emitido_en | fecha }}</small>
+  </h1>
+  <dl class="pares">
+    <dt>Estado fiscal</dt>
+    <dd>
+      <span class="chip fiscal-{{ nc.estado }}"
+        >{{ nc.estado | capitalize }}</span
+      >
+    </dd>
+    <dt>Referencia</dt>
+    <dd>
+      <a
+        class="enlace"
+        href="{{ url_for('salon.documento', did=nc.documento_id) }}"
+        >Comprobante {{ '%010d' % nc.documento.numero }}</a
+      >
+    </dd>
+    <dt>Cliente</dt>
+    <dd>{{ nc.receptor_nombre }} · {{ nc.receptor_ruc }}</dd>
+    <dt>Motivo</dt>
+    <dd>{{ nc.motivo }}</dd>
+    <dt>Solicitó / autorizó</dt>
+    <dd>{{ nc.solicitante.nombre }} / {{ nc.autorizador.nombre }}</dd>
+    <dt>Devolución</dt>
+    <dd>
+      {{ nc.forma_devolucion | capitalize }} · B/. {{ nc.total | dinero }}
+    </dd>
+    <dt>
+      {{ 'CUFE' if nc.estado in ('autorizado', 'simulado') else 'Código
+      provisional' }}
+    </dt>
+    <dd><code>{{ nc.cufe }}</code></dd>
+  </dl>
+  <table class="tabla separada">
+    <thead>
+      <tr>
+        <th>Cant.</th>
+        <th>Descripción</th>
+        <th class="num">ITBMS</th>
+        <th class="num">Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for it in items %}
+      <tr>
+        <td>{{ it.cantidad }}</td>
+        <td>{{ it.descripcion }}</td>
+        <td class="num">{{ it.itbms }}</td>
+        <td class="num">{{ it.total }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="fila-botones">
+    <a
+      class="btn btn-aceptar corto"
+      href="{{ url_for('salon.nota_pdf', nid=nc.id) }}"
+      target="_blank"
+      rel="noopener"
+      >Imprimir (PDF)</a
+    >
+    <a
+      class="btn corto"
+      href="{{ url_for('salon.nota_pdf', nid=nc.id, formato='carta') }}"
+      target="_blank"
+      rel="noopener"
+      >PDF carta</a
+    >
+    {% if nc.estado in ('pendiente', 'contingencia') %}
+    <form
+      method="post"
+      action="{{ url_for('salon.reintentar_nota', nid=nc.id) }}"
+    >
+      {{ csrf_field() }}<button class="btn" type="submit">
+        Reintentar autorización
+      </button>
+    </form>
+    {% endif %}
+    <a class="btn btn-gris" href="{{ url_for('caja.inicio') }}">Caja</a>
+  </div>
+</section>
+{% endblock %}

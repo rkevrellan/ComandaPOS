@@ -1,0 +1,6 @@
+# Configuración de bandit (análisis estático de seguridad) usada por build.bat.
+# Pruebas omitidas, con su justificación:
+#   B101 assert: las pruebas automáticas no se analizan; en app/ no se usan assert para seguridad.
+#   B404/B603: no aplica (no se ejecutan procesos externos desde la aplicación web).
+exclude_dirs: ["tests", ".venv", ".venv-build", "build", "dist"]
+skips: ["B101"]

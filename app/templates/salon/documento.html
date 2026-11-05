@@ -1,16 +1,24 @@
 {% extends "base.html" %} {% block titulo %}Comprobante {{ '%010d' % doc.numero
 }}{% endblock %} {% block contenido %}
 <section class="tarjeta tarjeta-centro">
-  {% if doc.estado == 'simulado' %}
-  <p class="aviso aviso-info">
-    Documento de prueba: sin validez fiscal hasta conectar el PAC (fase 5).
+  {% if leyenda %}
+  <p
+    class="aviso {{ 'aviso-error' if doc.estado in ('rechazado', 'contingencia', 'pendiente') else 'aviso-info' }}"
+  >
+    {{ leyenda }}{{ ' · ' ~ doc.mensaje if doc.mensaje else '' }}
   </p>
   {% endif %}
   <h1>
     Comprobante {{ '%010d' % doc.numero }}
-    <small>{{ doc.emitido_en | fecha }}</small>
+    <small>{{ doc.emitido_en | fecha }} · {{ doc.tipo_nombre }}</small>
   </h1>
   <dl class="pares">
+    <dt>Estado fiscal</dt>
+    <dd>
+      <span class="chip fiscal-{{ doc.estado }}"
+        >{{ doc.estado | capitalize }}</span
+      >
+    </dd>
     <dt>Cliente</dt>
     <dd>
       {{ doc.receptor_nombre }} · {{ doc.receptor_ruc }}{{ ' DV ' ~
@@ -21,27 +29,112 @@
       {{ comanda.mesa.numero if comanda.mesa else comanda.numero }} · comanda {{
       comanda.numero }} · cuenta {{ doc.cuenta.numero }}
     </dd>
-    <dt>Subtotal</dt>
-    <dd>B/. {{ doc.subtotal | dinero }}</dd>
-    <dt>Descuentos</dt>
-    <dd>
-      B/. {{ (doc.descuento_producto + doc.descuento_jubilado) | dinero }}
-    </dd>
-    <dt>ITBMS</dt>
-    <dd>B/. {{ doc.itbms | dinero }}</dd>
-    <dt>Total</dt>
-    <dd><b>B/. {{ doc.total | dinero }}</b></dd>
-    <dt>CUFE</dt>
+    <dt>
+      {{ 'CUFE' if doc.estado in ('autorizado', 'simulado') else 'Código
+      provisional' }}
+    </dt>
     <dd><code>{{ doc.cufe }}</code></dd>
+    {% if doc.protocolo %}
+    <dt>Protocolo</dt>
+    <dd>{{ doc.protocolo }} · {{ doc.autorizado_en | fecha }}</dd>
+    {% endif %}
   </dl>
+
+  <table class="tabla separada">
+    <thead>
+      <tr>
+        <th>Cant.</th>
+        <th>Descripción</th>
+        <th class="num">Precio</th>
+        <th class="num">Desc.</th>
+        <th class="num">ITBMS</th>
+        <th class="num">Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for it in items %}
+      <tr>
+        <td>{{ it.cantidad }}</td>
+        <td>
+          {{ it.descripcion }}{{ ' + ' ~ it.acompanamiento if it.acompanamiento
+          else '' }}
+        </td>
+        <td class="num">{{ it.precio }}</td>
+        <td class="num">{{ it.descuento }}</td>
+        <td class="num">{{ it.tasa }}% {{ it.itbms }}</td>
+        <td class="num">{{ it.total }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <dl class="totales separada">
+    <div>
+      <dt>Subtotal</dt>
+      <dd>{{ doc.subtotal | dinero }}</dd>
+    </div>
+    <div>
+      <dt>Descuentos</dt>
+      <dd>{{ (doc.descuento_producto + doc.descuento_jubilado) | dinero }}</dd>
+    </div>
+    <div>
+      <dt>ITBMS</dt>
+      <dd>{{ doc.itbms | dinero }}</dd>
+    </div>
+    <div class="total">
+      <dt>TOTAL</dt>
+      <dd>{{ doc.total | dinero }}</dd>
+    </div>
+  </dl>
+  {% if pagos %}
+  <p class="vacio">
+    Pagos: {% for p in pagos %}{{ formas_pago_nombre(p.forma) }} {{ p.recibido
+    }}{{ ' (vuelto ' ~ p.vuelto ~ ')' if p.vuelto != '0.00' else '' }}{{ ', ' if
+    not loop.last else '' }}{% endfor %}
+  </p>
+  {% endif %} {% if doc.notas_credito %}
+  <h2>Notas de crédito</h2>
+  <ul class="lista-simple">
+    {% for nc in doc.notas_credito %}
+    <li>
+      <a class="enlace" href="{{ url_for('salon.ver_nota', nid=nc.id) }}"
+        >NC {{ '%010d' % nc.numero }}</a
+      >
+      · B/. {{ nc.total | dinero }} · {{ nc.estado }} · {{ nc.motivo }}
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
   <div class="fila-botones">
     <a
-      class="btn btn-aceptar"
+      class="btn btn-aceptar corto"
       href="{{ url_for('salon.documento_pdf', did=doc.id) }}"
       target="_blank"
       rel="noopener"
-      >Imprimir comprobante (PDF)</a
+      >Imprimir ticket (PDF)</a
     >
+    <a
+      class="btn corto"
+      href="{{ url_for('salon.documento_pdf', did=doc.id, formato='carta') }}"
+      target="_blank"
+      rel="noopener"
+      >PDF carta</a
+    >
+    {% if es_cajero and doc.estado in ('pendiente', 'contingencia') %}
+    <form method="post" action="{{ url_for('salon.reintentar', did=doc.id) }}">
+      {{ csrf_field() }}<button class="btn" type="submit">
+        Reintentar autorización
+      </button>
+    </form>
+    {% endif %} {% if es_cajero and doc.estado in ('autorizado', 'simulado') %}
+    <a
+      class="btn peligro"
+      href="{{ url_for('salon.nota_credito', did=doc.id) }}"
+      >Nota de crédito</a
+    >
+    {% endif %}
+  </div>
+  <div class="fila-botones">
     {% if comanda.estado == 'abierta' %}
     <a class="btn" href="{{ url_for('salon.comanda', cid=comanda.id) }}"
       >Volver a la comanda</a

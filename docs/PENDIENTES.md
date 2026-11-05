@@ -1,18 +1,28 @@
-# Pendientes por fase
+# Estado de ComandaPOS 1.0
 
-| Fase | Estado | Qué falta |
-|---|---|---|
-| 1 · Base | ✔ Completa | Verificación en dos pasos (TOTP) para administración: va en la fase 6 con la pantalla de operadores. |
-| 2 · Salón | ✔ Completa | Unir dos mesas ocupadas (hoy «Mover mesa» solo va a mesas disponibles). |
-| 3 · Cocina e impresión | ◐ Parcial | Hecho: pantalla de cocina por área con P/L/E, tiempos y «Pedidos listos». Falta: impresión térmica ESC/POS de comandas por área (con saneamiento de bytes de control), avisos de anulación impresos y apertura de gaveta. |
-| 4 · Caja | ◐ Casi completa | Hecho: turnos con fondo, cobro con multipago, vuelto, crédito con límite, jubilado con cédula, corte Z con arqueo. Falta: corte X impreso, abonos a crédito con recibo, gaveta sin venta con motivo. |
-| 5 · Facturación electrónica | ◐ Base lista | Hecho: comprobante PDF 80 mm con estructura de CAFE y QR, numeración atómica. Falta: adaptador PAC (CUFE real, XML autorizado), contingencia, folios, notas de crédito, formato carta. |
-| 6 · Administración | Pendiente | Catálogos del menú (productos, secciones, mesas, operadores) con 2FA, inventario por receta (RN-14), reportes con gráficos. |
-| 7 · Escritorio | Pendiente | pywebview, modos servidor/terminal/cocina, emparejamiento con TLS, DPAPI, PyInstaller, Inno Setup, `build.bat`, dependencias con hash. |
-| 8 · Revisión | Pendiente | Revisión de seguridad independiente y zip final. |
+| Fase | Estado |
+|---|---|
+| 1 · Base (núcleo, seguridad, auditoría, cálculos) | ✔ Completa |
+| 2 · Salón (mesas, comanda, cuentas, pre-cuenta) | ✔ Completa |
+| 3 · Cocina e impresión (KDS, ESC/POS por área, avisos de anulación, gaveta, cola persistente) | ✔ Completa |
+| 4 · Caja (turnos, multipago, crédito, corte X y Z, abonos, gaveta sin venta) | ✔ Completa |
+| 5 · Facturación electrónica (PAC, contingencia, folios, notas de crédito, PDF ticket y carta) | ✔ Completa con PAC simulado; falta la traducción a la API del PAC real |
+| 6 · Administración (catálogos, operadores, 2FA, configuración, inventario por receta, reportes) | ✔ Completa |
+| 7 · Escritorio (pywebview, una instancia, servidor/terminal/cocina, PyInstaller, Inno Setup, `build.bat`) | ✔ Completa; el `.exe` se compila en Windows con `build.bat` |
+| 8 · Revisión (pruebas, pip-audit, bandit, recorrido en navegador, documentación) | ✔ Completa (revisión automática y propia) |
 
-## Notas de diseño
-- **Pantalla de cocina:** cualquier usuario con sesión puede marcar P/L/E (las pantallas de cocina usan una cuenta de
-  operador). Se recarga cada 15 s, así que no se bloquea por inactividad; conviene una cuenta dedicada por pantalla.
-- **Bases de datos de la fase 1:** al arrancar se crean solas las tablas nuevas. Como esa base ya tenía datos, no se abre
-  el turno de demostración: ábrelo en **Caja**.
+## Lo que falta para producción real (no se puede cerrar sin terceros)
+1. **API del PAC contratado:** mapear `PACHttp` a su documentación y probar en su ambiente (ver `FISCAL.md`).
+2. **Compilar el instalador en Windows** con `build.bat` (PyInstaller no genera `.exe` de Windows desde Linux;
+   el paquete se verificó compilando y ejecutando la misma especificación en Linux).
+3. **Firma de código** de los `.exe` (certificado comercial) para que Windows SmartScreen no los marque.
+4. **TLS en la red local:** hoy el tráfico entre terminales va en HTTP dentro de la red del local, filtrado por
+   la lista de terminales. Para redes no confiables: proxy HTTPS delante y `COMANDAPOS_HTTPS=1`.
+5. **Revisión de seguridad independiente** (pentest) antes de vender a terceros: esta fue una revisión propia.
+6. **Confirmar las suposiciones** de `SUPOSICIONES.md` con el contador.
+
+## Mejoras posibles (no bloquean)
+- Unir dos mesas ocupadas (hoy «Mover mesa» va a mesas libres).
+- Fotos de productos en la comanda.
+- Proteger la clave secreta de la instalación con DPAPI (hoy es un archivo en la carpeta de datos; ver SEGURIDAD §3).
+- Respaldo automático programado a USB o nube.

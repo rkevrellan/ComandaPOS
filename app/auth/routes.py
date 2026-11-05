@@ -30,6 +30,7 @@ from ..seguridad import (
     ACCESO_TERMINAL,
     CLAVE_DEMO,
     CUENTAS_DEMO,
+    DOS_PASOS,
     PIN_DEMO,
     con_sesion,
     destino_seguro,
@@ -38,10 +39,10 @@ from ..seguridad import (
     ip_cliente,
     publica,
 )
+from ..services import dos_pasos
 from ..services.auditoria import auditar, auditar_ya
 
 bp = Blueprint("auth", __name__)
-
 
 
 def _plantilla(codigo: int = 200, usuario: str = ""):
@@ -96,15 +97,68 @@ def acceso():
         return _plantilla(401, usuario)
 
     ACCESO.limpiar(llave)
+    siguiente = destino_seguro(request.args.get("siguiente"), url_for("mesas.control"))
+    if operador.tiene_2fa:
+        # Paso 2: la sesión todavía NO está iniciada; solo se recuerda quién va, por 5 minutos.
+        session.clear()
+        session["2fa"] = {
+            "id": operador.id,
+            "v": operador.version_sesion,
+            "t": time.time(),
+            "siguiente": siguiente,
+        }
+        return redirect(url_for("auth.segundo_paso"))
+    return _iniciar(operador, siguiente)
+
+
+def _iniciar(operador: Operador, siguiente: str):
     session.clear()  # sesión nueva: evita fijación de sesión
     login_user(operador, remember=False)
     session["ini"] = session["ult"] = time.time()
     operador.ultimo_acceso = ahora()
     auditar("acceso", f"{operador.usuario} ({operador.rol})", operador=operador)
     db.session.commit()
-    return redirect(
-        destino_seguro(request.args.get("siguiente"), url_for("mesas.control"))
+    return redirect(siguiente)
+
+
+@bp.route("/acceso/verificacion", methods=["GET", "POST"])
+@publica
+def segundo_paso():
+    pendiente = session.get("2fa")
+    operador = (
+        db.session.get(Operador, pendiente["id"])
+        if isinstance(pendiente, dict)
+        else None
     )
+    if (
+        operador is None
+        or not operador.activo
+        or operador.version_sesion != pendiente.get("v")
+        or time.time() - pendiente.get("t", 0) > 300
+    ):
+        session.pop("2fa", None)
+        flash("Vuelve a escribir tu usuario y clave.", "info")
+        return redirect(url_for("auth.acceso"))
+    if request.method == "POST":
+        llave = f"2fa|{operador.id}"
+        if DOS_PASOS.espera(llave):
+            evento_seguridad("2fa_bloqueado", operador.usuario)
+            flash("Demasiados códigos incorrectos. Espera unos minutos.", "error")
+            return render_template("auth/verificacion.html", operador=operador), 429
+        codigo = request.form.get("codigo") or ""
+        valido = dos_pasos.verificar(
+            operador, codigo
+        ) or dos_pasos.usar_codigo_recuperacion(operador, codigo)
+        if not valido:
+            DOS_PASOS.fallo(llave)
+            auditar_ya("2fa_fallido", operador.usuario, operador=operador)
+            flash("Código incorrecto.", "error")
+            return render_template("auth/verificacion.html", operador=operador), 401
+        DOS_PASOS.limpiar(llave)
+        return _iniciar(
+            operador, pendiente.get("siguiente") or url_for("mesas.control")
+        )
+    return render_template("auth/verificacion.html", operador=operador)
 
 
 @bp.post("/salir")

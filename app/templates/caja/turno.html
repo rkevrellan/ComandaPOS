@@ -1,0 +1,43 @@
+{% extends "base.html" %} {% block titulo %}Turno {{ turno.numero }}{% endblock
+%} {% block contenido %}
+<section class="tarjeta tarjeta-centro">
+  <h1>
+    Turno {{ turno.numero }}
+    <small
+      >{{ 'cerrado ' ~ (turno.cerrado_en | fecha) if turno.cerrado_en else
+      'abierto' }}</small
+    >
+  </h1>
+  <dl class="pares">
+    <dt>Cajero</dt>
+    <dd>{{ turno.cajero.nombre }}</dd>
+    <dt>Fondo</dt>
+    <dd>B/. {{ turno.fondo | dinero }}</dd>
+    <dt>Total ventas</dt>
+    <dd>B/. {{ datos.total | dinero }}</dd>
+    <dt>Efectivo esperado</dt>
+    <dd>B/. {{ datos.efectivo_esperado | dinero }}</dd>
+    {% if turno.cerrado_en %}
+    <dt>Efectivo contado</dt>
+    <dd>B/. {{ turno.efectivo_contado | dinero }}</dd>
+    <dt>Diferencia</dt>
+    <dd><b>B/. {{ turno.diferencia | dinero }}</b></dd>
+    {% if turno.justificacion %}
+    <dt>Justificación</dt>
+    <dd>{{ turno.justificacion }}</dd>
+    {% endif %} {% endif %}
+  </dl>
+  <div class="fila-botones">
+    {% if turno.cerrado_en %}
+    <a
+      class="btn btn-aceptar corto"
+      href="{{ url_for('caja.corte_z', tid=turno.id) }}"
+      target="_blank"
+      rel="noopener"
+      >Imprimir corte Z (PDF)</a
+    >
+    {% endif %}
+    <a class="btn btn-gris" href="{{ url_for('caja.inicio') }}">Caja</a>
+  </div>
+</section>
+{% endblock %}
