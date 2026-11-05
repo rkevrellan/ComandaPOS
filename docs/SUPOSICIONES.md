@@ -18,4 +18,8 @@ Decisiones tomadas para avanzar sin inventar reglas. Cada una es configurable y 
 | S-12 | Alerta de folios | Cuando quedan menos del 10 % de los folios comprados. | Administración | `fiscal.folios()` |
 | S-13 | Diferencia de caja | Más de B/. 1.00 en el corte Z exige justificación. | Administración | `services/caja.py` |
 | S-14 | Datos al desinstalar | No se borran (conservación de documentos fiscales). | Contador | `instalador/comandapos.iss` |
-| S-15 | Permisos de la carpeta de datos | Escribible por los usuarios del equipo (el cajero escribe la base). Se recomiendan cuentas de Windows separadas y BitLocker. | Quien instala | `instalador/comandapos.iss` |
+| S-15 | Permisos de la carpeta de datos | Solo Administradores, SYSTEM y el grupo local «ComandaPOS» (quien instala queda dentro; se agregan las cuentas del personal). | Quien instala | `instalador/comandapos.iss` |
+| S-16 | Comprobante rechazado | Se corrige y se reenvía con el **mismo número**, porque el PAC no lo registró. | PAC contratado | `fiscal.corregir_receptor` |
+| S-17 | Inventario insuficiente | Por defecto no se agrega ni se envía a cocina lo que la existencia no cubre (solo productos con control de inventario). | Administración | Configuración → «No enviar pedidos que el inventario no cubre» |
+| S-18 | HTTPS en la red | Certificados propios de ComandaPOS (CA local), instalados una vez en cada terminal. | Quien instala | `services/tls.py` |
+| S-19 | Cédula de jubilados | Enmascarada en pantalla y CSV; la completa solo para administración. | Administración / ACODECO | `reportes.enmascarar_cedula` |

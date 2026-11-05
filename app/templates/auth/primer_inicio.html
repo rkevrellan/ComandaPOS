@@ -1,0 +1,73 @@
+{% extends "base.html" %} {% block titulo %}Primer inicio{% endblock %} {% block
+contenido %}
+<section class="tarjeta tarjeta-centro">
+  <h1>Bienvenido a {{ NOMBRE }}</h1>
+  {% if remoto %}
+  <p>
+    Esta instalación todavía no tiene usuarios. Por seguridad, el primer
+    administrador se crea <b>en la PC donde está instalado {{ NOMBRE }}</b>, no
+    desde otra terminal de la red.
+  </p>
+  {% else %}
+  <p>
+    Instalación nueva en <b>producción</b>. Crea la cuenta del administrador:
+    con ella darás de alta a los meseros y cajeros, y configurarás el emisor, el
+    PAC y las impresoras. Al entrar, el sistema te pedirá activar la
+    verificación en dos pasos.
+  </p>
+  <form method="post" class="form-columna" autocomplete="off">
+    {{ csrf_field() }}
+    <label for="usuario">Usuario</label>
+    <input
+      id="usuario"
+      name="usuario"
+      value="{{ datos.usuario or '' }}"
+      maxlength="30"
+      required
+      autocapitalize="none"
+      spellcheck="false"
+    />
+    <label for="nombre">Nombre completo</label>
+    <input
+      id="nombre"
+      name="nombre"
+      value="{{ datos.nombre or '' }}"
+      maxlength="60"
+      required
+    />
+    <label for="clave"
+      >Contraseña (10 caracteres o más, con letras y números)</label
+    >
+    <input
+      id="clave"
+      name="clave"
+      type="password"
+      maxlength="128"
+      required
+      autocomplete="new-password"
+    />
+    <label for="repetir">Repite la contraseña</label>
+    <input
+      id="repetir"
+      name="repetir"
+      type="password"
+      maxlength="128"
+      required
+      autocomplete="new-password"
+    />
+    <label class="opcion-check">
+      <input type="checkbox" name="ejemplo" value="1" />
+      <span
+        >Cargar salas, mesas y un menú de ejemplo para editarlos (sin ventas,
+        clientes ni usuarios de prueba)</span
+      >
+    </label>
+    <div class="fila-botones">
+      <button class="btn btn-aceptar corto" type="submit">
+        Crear administrador
+      </button>
+    </div>
+  </form>
+  {% endif %}
+</section>
+{% endblock %}

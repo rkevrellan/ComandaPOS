@@ -259,25 +259,21 @@ def sincronizar_nombres_demo() -> int:
     return cambios
 
 
-def poblar() -> bool:
-    """Crea los datos si la base está vacía. Devuelve True si creó algo."""
-    if Operador.query.first() is not None:
-        sincronizar_nombres_demo()
-        return False
+def crear_catalogo(demo: bool) -> None:
+    """Salas, mesas, áreas, menú, acompañamientos y notas fijas de ejemplo.
 
-    for i, (usuario, nombre, rol) in enumerate(CUENTAS_DEMO, start=1):
-        op = Operador(
-            codigo=i * 2 + 1, nombre=nombre, cargo=CARGOS[rol], usuario=usuario, rol=rol
-        )
-        op.fijar_clave(PIN_DEMO if rol in ROLES_CON_PIN else CLAVE_DEMO)
-        db.session.add(op)
-
-    # Impresoras «archivo»: en la demostración cada trabajo se guarda en la carpeta de datos
-    # (impresiones/*.bin) y se ve en Administración → Impresoras. En el local se cambian a «red».
-    imp_cocina = Impresora(nombre="Cocina (demo)", tipo="archivo", destino="cocina")
-    imp_frente = Impresora(nombre="Frente (demo)", tipo="archivo", destino="frente")
-    imp_caja = Impresora(nombre="Caja (demo)", tipo="archivo", destino="caja")
-    db.session.add_all([imp_cocina, imp_frente, imp_caja])
+    En la demostración además: impresoras «archivo» e inventario por receta. En producción (opción
+    «Cargar salas, mesas y menú de ejemplo» del primer arranque) solo el catálogo, para editarlo.
+    """
+    if demo:
+        # Impresoras «archivo»: cada trabajo se guarda en la carpeta de datos (impresiones/*.bin)
+        # y se ve en Administración → Impresiones. En el local se cambian a «red» o «Windows».
+        imp_cocina = Impresora(nombre="Cocina (demo)", tipo="archivo", destino="cocina")
+        imp_frente = Impresora(nombre="Frente (demo)", tipo="archivo", destino="frente")
+        imp_caja = Impresora(nombre="Caja (demo)", tipo="archivo", destino="caja")
+        db.session.add_all([imp_cocina, imp_frente, imp_caja])
+    else:
+        imp_cocina = imp_frente = imp_caja = None
     cocina = AreaProduccion(codigo=1, descripcion="Cocina", impresora_obj=imp_cocina)
     frente = AreaProduccion(codigo=2, descripcion="Frente", impresora_obj=imp_frente)
     db.session.add_all([cocina, frente])
@@ -293,7 +289,7 @@ def poblar() -> bool:
                 numero=n,
                 sala=salon,
                 puestos=6 if n in (13, 14, 15) else 4,
-                estado="fuera" if n == 30 else "disponible",
+                estado="fuera" if (demo and n == 30) else "disponible",
             )
         )
     for n in range(31, 35):
@@ -339,22 +335,9 @@ def poblar() -> bool:
         )
     for codigo, desc in enumerate(NOTAS, start=1):
         db.session.add(NotaFija(codigo=codigo, descripcion=desc.upper()))
-    for ruc, dv, tipo, nombre, pago, limite in CLIENTES:
-        db.session.add(
-            Cliente(
-                ruc=ruc,
-                dv=dv or None,
-                tipo=tipo,
-                nombre=nombre,
-                tipo_pago=pago,
-                limite_credito=Decimal(limite),
-            )
-        )
-
-    configuracion.asegurar_valores()
-    secuencias.asegurar_secuencias()
-    auditoria.auditar("datos_demo", "Se crearon los datos de demostración")
     db.session.flush()
+    if not demo:
+        return
     configuracion.fijar("impresion.caja", imp_caja.id)
 
     # Inventario de ejemplo: algunos productos descuentan su receta al enviarse (RN-14).
@@ -397,6 +380,38 @@ def poblar() -> bool:
                     cantidad=Decimal(cantidad),
                 )
             )
+
+
+def poblar() -> bool:
+    """Demostración: crea los datos si la base está vacía. Devuelve True si creó algo."""
+    if Operador.query.first() is not None:
+        sincronizar_nombres_demo()
+        return False
+
+    for i, (usuario, nombre, rol) in enumerate(CUENTAS_DEMO, start=1):
+        op = Operador(
+            codigo=i * 2 + 1, nombre=nombre, cargo=CARGOS[rol], usuario=usuario, rol=rol
+        )
+        op.fijar_clave(PIN_DEMO if rol in ROLES_CON_PIN else CLAVE_DEMO)
+        db.session.add(op)
+
+    configuracion.asegurar_valores(demo=True)
+    secuencias.asegurar_secuencias()
+    crear_catalogo(demo=True)
+    for ruc, dv, tipo, nombre, pago, limite in CLIENTES:
+        db.session.add(
+            Cliente(
+                ruc=ruc,
+                dv=dv or None,
+                tipo=tipo,
+                nombre=nombre,
+                tipo_pago=pago,
+                limite_credito=Decimal(limite),
+            )
+        )
+    # Marca: esta base es de demostración y nunca se usa en producción (H-01).
+    configuracion.fijar("base.demo", "1")
+    auditoria.auditar("datos_demo", "Se crearon los datos de demostración")
     db.session.commit()
     # Turno de caja abierto para que la demostración permita cobrar desde el primer momento.
     cajera = Operador.query.filter_by(usuario="marta").one()
@@ -426,7 +441,7 @@ def main() -> int:
                 os.remove(ancla)
             db.create_all()
             secuencias.asegurar_secuencias()
-            configuracion.asegurar_valores()
+            configuracion.asegurar_valores(demo=True)
         creado = poblar()
         print(
             "Datos de demostración creados."

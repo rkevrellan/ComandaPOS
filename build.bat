@@ -37,7 +37,7 @@ echo [6/7] Empaquetado (PyInstaller)
 if exist "build" rmdir /s /q "build"
 if exist "dist" rmdir /s /q "dist"
 "%VPY%" -m PyInstaller --noconfirm --clean comandapos.spec || goto error
-"dist\ComandaPOS\ComandaPOS-servidor.exe" --help >nul || goto error
+"dist\ComandaPOS\ComandaPOS-servidor.exe" --verificar || goto error
 
 echo [7/7] Instalador (Inno Setup)
 set ISCC=

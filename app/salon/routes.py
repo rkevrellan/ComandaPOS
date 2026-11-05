@@ -369,8 +369,9 @@ def descuento(lid: int):
         try:
             from ..services import configuracion
 
-            pct = request.form.get("pct", "0")
+            pct = (request.form.get("pct") or "0").strip()
             tope = int(configuracion.obtener("descuento.tope_sin_supervisor") or 10)
+            # H-15: se decide con el número ya limpio (« 50», «050», «50 » → 50).
             necesita = pct.isdigit() and int(pct) > tope
             autorizador = _autorizador("supervisor") if necesita else current_user
             pedidos.descontar(linea, pct, autorizador)
@@ -571,6 +572,7 @@ def _pantalla_cobro(cuenta: Cuenta, previo):
         q=q,
         clientes=clientes,
         credito=credito,
+        avisos_fiscales=fiscal.avisos(),
     )
 
 
@@ -626,8 +628,8 @@ def documento_pdf(did: int):
 @rol_requerido(*desde("cajero"))
 def reintentar(did: int):
     doc = db.get_or_404(Documento, did)
-    if doc.estado not in fiscal.ESTADOS_PENDIENTES:
-        flash("Ese comprobante no está pendiente.", "info")
+    if doc.estado not in fiscal.ESTADOS_PENDIENTES + ("rechazado",):
+        flash("Ese comprobante ya está autorizado.", "info")
     else:
         estado = fiscal.autorizar(doc, url_de(doc))
         db.session.commit()
@@ -639,6 +641,35 @@ def reintentar(did: int):
             ),
             "ok" if estado != "contingencia" else "error",
         )
+    return redirect(url_for("salon.documento", did=doc.id))
+
+
+@bp.post("/documento/<int:did>/corregir")
+@rol_requerido(*desde("cajero"))
+def corregir(did: int):
+    """H-02: corregir el receptor de un comprobante rechazado y reenviarlo al PAC."""
+    doc = db.get_or_404(Documento, did)
+    try:
+        fiscal.corregir_receptor(
+            doc,
+            request.form.get("tipo"),
+            request.form.get("ruc"),
+            request.form.get("dv"),
+            request.form.get("nombre"),
+        )
+        db.session.commit()
+    except ReglaNegocioError as e:
+        db.session.rollback()
+        flash(str(e), "error")
+        return redirect(url_for("salon.documento", did=doc.id))
+    estado = fiscal.autorizar(doc, url_de(doc))
+    db.session.commit()
+    flash(
+        "Corregido y autorizado."
+        if estado in ("autorizado", "simulado")
+        else f"Corregido; el PAC respondió: {doc.mensaje}",
+        "ok" if estado in ("autorizado", "simulado") else "error",
+    )
     return redirect(url_for("salon.documento", did=doc.id))
 
 
@@ -718,7 +749,7 @@ def nota_pdf(nid: int):
 @rol_requerido(*desde("cajero"))
 def reintentar_nota(nid: int):
     nc = db.get_or_404(NotaCredito, nid)
-    if nc.estado in fiscal.ESTADOS_PENDIENTES:
+    if nc.estado in fiscal.ESTADOS_PENDIENTES + ("rechazado",):
         fiscal.autorizar(nc, url_de(nc))
         db.session.commit()
     return redirect(url_for("salon.ver_nota", nid=nc.id))
@@ -747,12 +778,8 @@ def _pdf_documento(doc, nombre: str):
 
 
 def _imprimir() -> None:
-    try:
-        impresion.procesar_pendientes()
-    except (
-        Exception
-    ):  # pragma: no cover - imprimir nunca tumba la venta; queda en la cola
-        db.session.rollback()
+    """H-07: la impresión va en segundo plano; el mesero no espera a la impresora."""
+    impresion.despertar()
 
 
 def _gaveta() -> None:

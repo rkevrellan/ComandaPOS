@@ -24,15 +24,36 @@ from app.config import NOMBRE, VERSION
 ANCHO, ALTO = 1366, 820
 
 
-def _responde(url: str) -> bool:
-    """¿Hay un ComandaPOS escuchando en esa dirección?"""
-    try:
-        with urllib.request.urlopen(
-            f"{url}/salud", timeout=1.5
-        ) as r:  # nosec B310 (solo 127.0.0.1)
+def _responde(url: str, ca: str | None = None) -> bool:
+    """¿Hay un ComandaPOS escuchando en esa dirección? (https: valida el certificado)."""
+    import ssl
+
+    contexto = ssl.create_default_context(cafile=ca) if url.startswith("https") else None
+    try:  # url es http(s)://host:puerto validada aquí (no viene de fuera)
+        with urllib.request.urlopen(  # nosec B310
+            f"{url}/salud", timeout=1.5, context=contexto
+        ) as r:
             return json.load(r).get("app") == NOMBRE
     except (OSError, ValueError):
         return False
+
+
+def _ca_local() -> str | None:
+    """Certificado de la CA de ComandaPOS de ESTE equipo (si el servidor de red ya lo creó)."""
+    import os
+
+    from app.config import carpeta_datos
+
+    ruta = os.path.join(carpeta_datos(os.path.expanduser("~")), "tls", "ca.crt")
+    return ruta if os.path.exists(ruta) else None
+
+
+def _local(puerto: int) -> str | None:
+    """Dirección del ComandaPOS que ya corre en este equipo: http (local) o https (servidor de red)."""
+    for url in (f"http://127.0.0.1:{puerto}", f"https://127.0.0.1:{puerto}"):
+        if _responde(url, _ca_local() if url.startswith("https") else None):
+            return url
+    return None
 
 
 def _url_servidor(texto: str) -> str | None:
@@ -49,6 +70,24 @@ def _url_servidor(texto: str) -> str | None:
     ):
         return None
     return f"{partes.scheme}://{partes.netloc}"
+
+
+def _responde_https_sin_confianza(remoto_http: str) -> bool:
+    """¿Contesta TLS en esa dirección? (solo para dar el mensaje correcto; no se usa la conexión)."""
+    import socket
+    import ssl
+    from urllib.parse import urlparse
+
+    partes = urlparse(remoto_http)
+    contexto = ssl.create_default_context()
+    contexto.check_hostname = False
+    contexto.verify_mode = ssl.CERT_NONE  # nosec - solo detecta si hay TLS; no envía datos
+    try:
+        with socket.create_connection((partes.hostname, partes.port or 80), timeout=1.5) as c:
+            with contexto.wrap_socket(c):
+                return True
+    except (OSError, ssl.SSLError):
+        return False
 
 
 def _puerto_libre(puerto: int) -> bool:
@@ -133,19 +172,33 @@ def main(argv: list | None = None) -> int:
             _mensaje("La dirección del servidor debe ser como http://192.168.1.10:5000")
             return 2
         if not _responde(remoto):
-            _mensaje(
-                f"No se encontró {NOMBRE} en {remoto}. Revisa que la PC de caja esté encendida "
-                "con el servidor de red local abierto y que esta terminal esté en su lista de "
-                "«Terminales permitidas»."
-            )
+            if remoto.startswith("http://") and _responde_https_sin_confianza(remoto):
+                _mensaje(
+                    f"El servidor usa HTTPS. Abre ComandaPOS con «--servidor https://{remoto[7:]}» "
+                    "e instala antes su certificado (ca.crt) en esta terminal."
+                )
+            elif remoto.startswith("https://"):
+                _mensaje(
+                    f"No se pudo conectar con {remoto} de forma segura. Si la PC de caja está "
+                    "encendida con el servidor de red, instala en esta terminal su certificado "
+                    "«ca.crt» (doble clic → Instalar certificado → Entidades de certificación raíz "
+                    "de confianza) y comprueba la huella que muestra el servidor."
+                )
+            else:
+                _mensaje(
+                    f"No se encontró {NOMBRE} en {remoto}. Revisa que la PC de caja esté encendida "
+                    "con el servidor de red local abierto y que esta terminal esté en su lista de "
+                    "«Terminales permitidas»."
+                )
             return 1
         _abrir_ventana(remoto + pagina)
         return 0
 
     url = f"http://127.0.0.1:{args.puerto}"
 
-    if _responde(url):  # ya abierto (aquí o como servidor de red): solo otra ventana
-        _abrir_ventana(url + pagina)
+    ya = _local(args.puerto)
+    if ya:  # ya abierto (aquí o como servidor de red): solo otra ventana
+        _abrir_ventana(ya + pagina)
         return 0
     if not _puerto_libre(args.puerto):
         _mensaje(
@@ -163,10 +216,19 @@ def main(argv: list | None = None) -> int:
     app = create_app()
     codigo = preparar(app)
     if codigo is not None:
-        _mensaje(
-            "Hay cuentas con credenciales de prueba en una instalación de producción.\n"
-            "Ejecuta «ComandaPOS-servidor.exe --nuevas-claves» antes de usar el sistema."
-        )
+        from run import SALIDA_BASE_DEMO
+
+        if codigo == SALIDA_BASE_DEMO:
+            _mensaje(
+                "Este equipo está en producción pero la base es de demostración.\n"
+                "Menú Inicio > ComandaPOS > «Empezar con una base nueva» la aparta en un\n"
+                "respaldo (no borra nada) y después podrás crear el primer administrador."
+            )
+        else:
+            _mensaje(
+                "Hay cuentas con credenciales de prueba en una instalación de producción.\n"
+                "Ejecuta «ComandaPOS-servidor.exe --nuevas-claves» antes de usar el sistema."
+            )
         return codigo
 
     servidor = create_server(

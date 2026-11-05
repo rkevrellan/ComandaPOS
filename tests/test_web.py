@@ -51,10 +51,59 @@ def test_bloqueo_tras_cinco_fallos(client):
     assert r.status_code == 429 and "Demasiados intentos" in r.get_data(as_text=True)
 
 
-def test_bloqueo_por_terminal_aunque_rote_usuarios(client):
+def test_bloqueo_por_terminal_aunque_rote_usuarios(app):
+    from app.services import configuracion
+
+    with app.app_context():
+        configuracion.fijar("red.terminales", "192.168.1.0/24")
+        db.session.commit()
+    lejos = app.test_client()
+    lejos.environ_base["REMOTE_ADDR"] = "192.168.1.60"
+    for i in range(30):
+        entrar(lejos, f"inventado{i}", "x")
+    assert entrar(lejos, "ana").status_code == 429
+
+
+def test_en_este_equipo_un_usuario_no_bloquea_a_los_demas(client):
+    """H-24: en la PC de caja todos entran desde 127.0.0.1."""
     for i in range(30):
         entrar(client, f"inventado{i}", "x")
-    assert entrar(client, "ana").status_code == 429
+    assert entrar(client, "ana").status_code == 302
+
+
+def test_bloqueo_por_usuario_se_desbloquea_desde_administracion(app, client):
+    from app.models import Operador
+
+    for _ in range(5):
+        entrar(client, "luis", "000000")
+    assert entrar(client, "luis").status_code == 429
+    admin = app.test_client()
+    entrar(admin, "admin")
+    with app.app_context():
+        oid = Operador.query.filter_by(usuario="luis").one().id
+    from tests.conftest import csrf
+
+    token = csrf(admin, f"/admin/operadores/{oid}")
+    admin.post(f"/admin/operadores/{oid}/desbloquear", data={"csrf_token": token})
+    assert entrar(client, "luis").status_code == 302
+
+
+def test_limitador_atomico_y_persistente(tmp_path):
+    """H-16: ni hilos simultáneos ni un reinicio saltan el límite."""
+    import threading
+
+    from app.seguridad import Limitador
+
+    lim = Limitador(5, 600, "prueba")
+    lim.persistir(str(tmp_path))
+    pasaron = []
+    hilos = [threading.Thread(target=lambda: pasaron.append(lim.tomar("x") == 0)) for _ in range(40)]
+    [h.start() for h in hilos]
+    [h.join() for h in hilos]
+    assert sum(pasaron) == 5
+    nuevo = Limitador(5, 600, "prueba")  # «reinicio del programa»
+    nuevo.persistir(str(tmp_path))
+    assert nuevo.espera("x") > 0
 
 
 def test_operador_inactivo_no_entra(app, client):

@@ -44,47 +44,78 @@ def rango(desde: str | None, hasta: str | None) -> tuple:
     return inicio, fin, d, h
 
 
+#: H-12: lo que cuenta como venta. Los RECHAZADOS por el PAC no son ventas facturadas: se muestran
+#: aparte hasta que se corrijan. (Simulado solo existe en la demostración.)
+ESTADOS_VENTA = ("autorizado", "simulado", "contingencia", "pendiente")
+
+
 def _documentos(inicio, fin):
-    return (
-        Documento.query.filter(
-            Documento.emitido_en >= inicio, Documento.emitido_en < fin
-        )
-        .order_by(Documento.emitido_en)
-        .all()
+    return Documento.query.filter(
+        Documento.emitido_en >= inicio,
+        Documento.emitido_en < fin,
+        Documento.estado.in_(ESTADOS_VENTA),
     )
 
 
 def _notas(inicio, fin):
     return NotaCredito.query.filter(
-        NotaCredito.emitido_en >= inicio, NotaCredito.emitido_en < fin
+        NotaCredito.emitido_en >= inicio,
+        NotaCredito.emitido_en < fin,
+        NotaCredito.estado.in_(ESTADOS_VENTA),
     ).all()
 
 
 def calcular(inicio, fin) -> dict:
-    docs = _documentos(inicio, fin)
+    """Reportes del rango. H-19: solo se leen las columnas necesarias (sin el detalle JSON ni los
+    objetos completos) y lo agrupable se agrupa en SQL."""
+    from sqlalchemy import func
+
+    filas = (
+        _documentos(inicio, fin)
+        .with_entities(
+            Documento.emitido_en,
+            Documento.total,
+            Documento.impuestos,
+            Documento.descuento_producto,
+            Documento.descuento_jubilado,
+        )
+        .order_by(Documento.emitido_en)
+        .all()
+    )
     notas = _notas(inicio, fin)
+    ventas = sum((f.total for f in filas), CERO)
     r = {
-        "documentos": len(docs),
-        "ventas": sum((d.total for d in docs), CERO),
+        "documentos": len(filas),
+        "ventas": ventas,
         "notas_total": sum((n.total for n in notas), CERO),
         "notas": notas,
     }
     r["neto"] = r["ventas"] - r["notas_total"]
     r["ticket_promedio"] = (
-        (r["ventas"] / len(docs)).quantize(Decimal("0.01")) if docs else CERO
+        (ventas / len(filas)).quantize(Decimal("0.01")) if filas else CERO
     )
     r["descuentos"] = sum(
-        (d.descuento_producto + d.descuento_jubilado for d in docs), CERO
+        (f.descuento_producto + f.descuento_jubilado for f in filas), CERO
     )
+    rechazados = (
+        Documento.query.filter(
+            Documento.emitido_en >= inicio,
+            Documento.emitido_en < fin,
+            Documento.estado == "rechazado",
+        )
+        .with_entities(Documento.total)
+        .all()
+    )
+    r["rechazados"] = (len(rechazados), sum((x.total for x in rechazados), CERO))
 
     # por día y mapa de calor (día de la semana × hora)
     por_dia = defaultdict(lambda: [0, CERO])
     calor = defaultdict(lambda: CERO)
-    for d in docs:
-        momento = local(d.emitido_en)
+    for f in filas:
+        momento = local(f.emitido_en)
         por_dia[momento.date()][0] += 1
-        por_dia[momento.date()][1] += d.total
-        calor[(momento.weekday(), momento.hour)] += d.total
+        por_dia[momento.date()][1] += f.total
+        calor[(momento.weekday(), momento.hour)] += f.total
     r["por_dia"] = sorted(por_dia.items())
     maximo = max(calor.values(), default=CERO)
     # Siempre el horario típico de servicio (10 a 22 h) y, si hubo ventas fuera de él, se amplía.
@@ -95,46 +126,69 @@ def calcular(inicio, fin) -> dict:
         "maximo": maximo,
     }
 
-    # por mesero
-    por_mesero = defaultdict(lambda: [0, CERO])
-    for d in docs:
-        nombre = d.cuenta.comanda.mesero.nombre
-        por_mesero[nombre][0] += 1
-        por_mesero[nombre][1] += d.total
-    r["por_mesero"] = sorted(por_mesero.items(), key=lambda x: -x[1][1])
+    # por mesero (agrupado en SQL)
+    from ..models import Comanda, Operador
+
+    por_mesero = (
+        _documentos(inicio, fin)
+        .join(Cuenta, Documento.cuenta_id == Cuenta.id)
+        .join(Comanda, Cuenta.comanda_id == Comanda.id)
+        .join(Operador, Comanda.mesero_id == Operador.id)
+        .with_entities(
+            Operador.nombre, func.count(Documento.id), func.sum(Documento.total)
+        )
+        .group_by(Operador.nombre)
+        .all()
+    )
+    r["por_mesero"] = sorted(
+        ((nombre, [n, _dinero(total)]) for nombre, n, total in por_mesero),
+        key=lambda x: -x[1][1],
+    )
 
     # por forma de pago
-    pagos = Pago.query.filter(Pago.fecha >= inicio, Pago.fecha < fin).all()
     por_forma = defaultdict(lambda: CERO)
-    for p in pagos:
-        por_forma[p.forma] += p.monto
+    for forma, monto in (
+        Pago.query.filter(Pago.fecha >= inicio, Pago.fecha < fin)
+        .with_entities(Pago.forma, Pago.monto)
+        .all()
+    ):
+        por_forma[forma] += monto
     r["por_forma"] = sorted(por_forma.items(), key=lambda x: -x[1])
 
     # por sección y producto (líneas cobradas, no anuladas)
+    from ..models import Producto, Seccion
+
     lineas = (
         LineaPedido.query.join(Cuenta)
+        .outerjoin(Producto, LineaPedido.producto_id == Producto.id)
+        .outerjoin(Seccion, Producto.seccion_id == Seccion.id)
         .filter(
             Cuenta.pagada_en >= inicio,
             Cuenta.pagada_en < fin,
             LineaPedido.estado != "ANU",
         )
+        .with_entities(
+            LineaPedido.descripcion,
+            Seccion.nombre,
+            LineaPedido.cantidad,
+            LineaPedido.precio,
+        )
         .all()
     )
     por_seccion = defaultdict(lambda: CERO)
     por_producto = defaultdict(lambda: [Decimal("0"), CERO])
-    for ln in lineas:
-        bruto = (ln.cantidad * ln.precio).quantize(Decimal("0.01"))
-        seccion = ln.producto.seccion.nombre if ln.producto else "—"
-        por_seccion[seccion] += bruto
-        por_producto[ln.descripcion][0] += ln.cantidad
-        por_producto[ln.descripcion][1] += bruto
+    for descripcion, seccion, cantidad, precio in lineas:
+        bruto = (cantidad * precio).quantize(Decimal("0.01"))
+        por_seccion[seccion or "—"] += bruto
+        por_producto[descripcion][0] += cantidad
+        por_producto[descripcion][1] += bruto
     r["por_seccion"] = sorted(por_seccion.items(), key=lambda x: -x[1])
     r["por_producto"] = sorted(por_producto.items(), key=lambda x: -x[1][1])[:25]
 
     # ITBMS por tasa (neto de notas de crédito)
     impuestos = defaultdict(lambda: [CERO, CERO])
-    for d in docs:
-        for tasa, (base, imp) in json.loads(d.impuestos or "{}").items():
+    for f in filas:
+        for tasa, (base, imp) in json.loads(f.impuestos or "{}").items():
             impuestos[int(tasa)][0] += Decimal(base)
             impuestos[int(tasa)][1] += Decimal(imp)
     for n in notas:
@@ -146,7 +200,11 @@ def calcular(inicio, fin) -> dict:
 
     # jubilados
     jub = []
-    for d in docs:
+    for d in (
+        _documentos(inicio, fin)
+        .filter(Documento.descuento_jubilado > 0)
+        .order_by(Documento.emitido_en)
+    ):
         if d.descuento_jubilado:
             detalle = json.loads(d.detalle or "{}")
             persona = (
@@ -189,6 +247,15 @@ def calcular(inicio, fin) -> dict:
     return r
 
 
+def _dinero(valor) -> Decimal:
+    """SUM de una columna de dinero: según el motor llega en centavos (int) o ya como Decimal."""
+    if valor is None:
+        return CERO
+    if isinstance(valor, Decimal):
+        return valor
+    return (Decimal(int(valor)) / 100).quantize(Decimal("0.01"))
+
+
 def _prom(valores) -> float | None:
     return round(sum(valores) / len(valores), 1) if valores else None
 
@@ -216,7 +283,19 @@ def a_csv(filas: list, encabezado: list) -> bytes:
     return ("﻿" + salida.getvalue()).encode("utf-8")  # BOM: Excel abre bien las tildes
 
 
-def filas_csv(nombre: str, r: dict) -> tuple[list, list]:
+def enmascarar_cedula(cedula: str) -> str:
+    """H-21: «8-123-4567» → «8-***-4567». Basta para identificar el caso ante ACODECO sin exponer
+    la cédula completa en cada archivo que se baja."""
+    cedula = (cedula or "").strip()
+    if len(cedula) <= 4:
+        return "*" * len(cedula)
+    cola = cedula[-4:].lstrip("-")
+    if "-" in cedula[:-4]:
+        return f"{cedula.split('-', 1)[0]}-***-{cola}"
+    return f"***{cola}"
+
+
+def filas_csv(nombre: str, r: dict, cedula_completa: bool = False) -> tuple[list, list]:
     if nombre == "dias":
         return ["Fecha", "Comprobantes", "Ventas"], [
             (d.isoformat(), n, t) for d, (n, t) in r["por_dia"]
@@ -242,7 +321,7 @@ def filas_csv(nombre: str, r: dict) -> tuple[list, list]:
                 (
                     f"{d.numero:010d}",
                     local(d.emitido_en).strftime("%d/%m/%Y %H:%M"),
-                    c,
+                    c if cedula_completa else enmascarar_cedula(c),
                     n,
                     d.descuento_jubilado,
                     d.total,

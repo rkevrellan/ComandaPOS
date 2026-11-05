@@ -15,6 +15,7 @@ import ipaddress
 import os
 import re
 import socket
+import threading
 from datetime import timedelta
 
 from flask import current_app
@@ -257,21 +258,38 @@ def encolar_comandas(comanda, lineas) -> int:
     return n
 
 
+#: Puertos «RAW» de impresoras térmicas (JetDirect).
+PUERTOS_IMPRESORA = range(9100, 9110)
+
+
 def validar_destino(tipo: str, destino: str) -> str:
     destino = (destino or "").strip()
     if tipo == "red":
         host, _, puerto = destino.partition(":")
         try:
-            ipaddress.ip_address(
-                host
-            )  # solo IP literal: nada de nombres que resuelvan a otro lado
+            # Solo IP literal: nada de nombres que resuelvan a otro lado.
+            ip = ipaddress.ip_address(host)
             puerto = int(puerto or "9100")
         except ValueError:
             raise ValueError(
                 "Escribe la IP y el puerto, por ejemplo 192.168.1.50:9100."
             ) from None
-        if not 1 <= puerto <= 65535:
-            raise ValueError("El puerto no es válido.")
+        # H-17: una impresora es otro aparato de la red del local: IP privada, nunca este mismo
+        # equipo, una dirección de enlace local (metadatos de la nube) ni multidifusión.
+        if (
+            ip.version != 4
+            or not ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_multicast
+            or ip.is_unspecified
+            or ip.is_reserved
+        ):
+            raise ValueError(
+                "La impresora debe tener una IP privada de la red del local (ej. 192.168.1.50)."
+            )
+        if puerto not in PUERTOS_IMPRESORA:
+            raise ValueError("Las impresoras térmicas usan los puertos 9100 a 9109.")
         return f"{host}:{puerto}"
     if tipo == "windows":
         if not destino or len(destino) > 120 or _CONTROL.search(destino):
@@ -314,32 +332,93 @@ def _enviar(impresora: Impresora, datos: bytes) -> None:
         raise OSError("Tipo de impresora desconocido.")
 
 
-def procesar_pendientes(limite: int = 30) -> tuple[int, int]:
-    """Envía los trabajos pendientes. Devuelve (impresos, con error). Confirma cada resultado."""
-    impresos = errores = 0
-    trabajos = (
-        TrabajoImpresion.query.filter(
-            TrabajoImpresion.estado.in_(("pendiente", "error")),
-            TrabajoImpresion.intentos < MAX_INTENTOS,
+_CANDADO = threading.Lock()
+_DESPERTAR = threading.Event()
+_TRABAJADOR: dict = {}
+
+
+def procesar_pendientes(limite: int = 30, esperar: bool = False) -> tuple[int, int]:
+    """Envía los trabajos pendientes. Devuelve (impresos, con error). Confirma cada resultado.
+
+    H-07: una sola pasada a la vez (candado: nunca se imprime dos veces lo mismo) y una impresora que
+    falla se salta en el resto de la pasada (una impresora apagada cuesta 4 s, no 4 s por trabajo).
+    """
+    if not _CANDADO.acquire(blocking=esperar, timeout=10 if esperar else -1):
+        return 0, 0  # otra pasada ya está imprimiendo
+    try:
+        impresos = errores = 0
+        caidas: set = set()
+        trabajos = (
+            TrabajoImpresion.query.filter(
+                TrabajoImpresion.estado.in_(("pendiente", "error")),
+                TrabajoImpresion.intentos < MAX_INTENTOS,
+            )
+            .order_by(TrabajoImpresion.id)
+            .limit(limite)
+            .all()
         )
-        .order_by(TrabajoImpresion.id)
-        .limit(limite)
-        .all()
-    )
-    for trabajo in trabajos:
-        trabajo.intentos += 1
+        for trabajo in trabajos:
+            if trabajo.impresora_id in caidas:
+                continue
+            trabajo.intentos += 1
+            impresora, contenido = trabajo.impresora, trabajo.contenido
+            # Se confirma ANTES de hablar con la impresora: la base no queda bloqueada para
+            # escribir mientras se espera a un aparato lento (las ventas siguen, H-07).
+            db.session.commit()
+            try:
+                _enviar(impresora, contenido)
+                trabajo.estado = "impreso"
+                trabajo.impreso_en = ahora()
+                trabajo.error = None
+                impresos += 1
+            except (OSError, ValueError) as e:
+                trabajo.estado = "error"
+                trabajo.error = limpiar(f"{type(e).__name__}: {e}")[:200]
+                errores += 1
+                caidas.add(trabajo.impresora_id)
+            db.session.commit()
+        return impresos, errores
+    finally:
+        _CANDADO.release()
+
+
+def despertar() -> None:
+    """Pide imprimir lo pendiente SIN hacer esperar a quien envió el pedido (H-07).
+
+    En las pruebas (`IMPRESION_EN_SEGUNDO_PLANO` apagado) se imprime en el momento."""
+    app = current_app._get_current_object()
+    if not app.config.get("IMPRESION_EN_SEGUNDO_PLANO"):
         try:
-            _enviar(trabajo.impresora, trabajo.contenido)
-            trabajo.estado = "impreso"
-            trabajo.impreso_en = ahora()
-            trabajo.error = None
-            impresos += 1
-        except (OSError, ValueError) as e:
-            trabajo.estado = "error"
-            trabajo.error = limpiar(f"{type(e).__name__}: {e}")[:200]
-            errores += 1
-        db.session.commit()
-    return impresos, errores
+            procesar_pendientes()
+        except Exception:  # pragma: no cover - imprimir nunca tumba la venta
+            db.session.rollback()
+        return
+    hilo = _TRABAJADOR.get(id(app))
+    if hilo is None or not hilo.is_alive():
+        hilo = threading.Thread(
+            target=_trabajar, args=(app,), name="impresion", daemon=True
+        )
+        _TRABAJADOR[id(app)] = hilo
+        hilo.start()
+    _DESPERTAR.set()
+
+
+def _trabajar(app) -> None:  # pragma: no cover - hilo de fondo (se prueba en test_correcciones)
+    """Imprime al recibir aviso y, además, cada 30 s reintenta lo que quedó en la cola."""
+    while True:
+        _DESPERTAR.wait(timeout=30)
+        _DESPERTAR.clear()
+        if not app.config.get("IMPRESION_EN_SEGUNDO_PLANO"):
+            _TRABAJADOR.pop(id(app), None)
+            return  # se apagó (pruebas): termina el hilo
+        with app.app_context():
+            try:
+                procesar_pendientes()
+            except Exception:
+                db.session.rollback()
+                app.logger.exception("Error en la cola de impresión")
+            finally:
+                db.session.remove()
 
 
 def vista_previa(contenido: bytes) -> str:

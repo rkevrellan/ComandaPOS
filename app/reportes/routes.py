@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from flask_login import current_user
 from flask import (
     Blueprint,
     Response,
@@ -52,6 +53,7 @@ def inicio():
         dias=reportes.DIAS,
         nivel=reportes.nivel_calor,
         local=reportes.local,
+        enmascarar=reportes.enmascarar_cedula,
     )
 
 
@@ -67,10 +69,20 @@ def csv(nombre: str):
     except ReglaNegocioError as e:
         flash(str(e), "error")
         return redirect(url_for("reportes.inicio"))
-    encabezado, filas = reportes.filas_csv(
-        nombre, reportes.calcular(inicio_utc, fin_utc)
+    # H-21: la cédula completa solo la baja un administrador, a propósito, y queda auditado.
+    completa = (
+        nombre == "jubilados"
+        and request.args.get("cedula") == "completa"
+        and current_user.puede("administrador")
     )
-    auditar("exportacion", f"reporte {nombre} {d}..{h} ({len(filas)} filas)")
+    encabezado, filas = reportes.filas_csv(
+        nombre, reportes.calcular(inicio_utc, fin_utc), cedula_completa=completa
+    )
+    auditar(
+        "exportacion",
+        f"reporte {nombre} {d}..{h} ({len(filas)} filas)"
+        + (" CON CÉDULA COMPLETA" if completa else ""),
+    )
     db.session.commit()
     return Response(
         reportes.a_csv(filas, encabezado),

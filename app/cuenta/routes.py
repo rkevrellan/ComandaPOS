@@ -38,15 +38,28 @@ def exige_2fa(operador) -> bool:
 
 def _reautenticar(clave: str) -> bool:
     llave = f"reauth|{current_user.id}"
-    if REAUTENTICAR.espera(llave):
+    if REAUTENTICAR.tomar(llave):  # H-16: revisa y cuenta en un paso
         evento_seguridad("reautenticacion_bloqueada", current_user.usuario)
         flash("Demasiados intentos. Espera unos minutos.", "error")
         return False
     if not current_user.verificar_clave(clave or ""):
-        REAUTENTICAR.fallo(llave)
         flash("La clave actual no es correcta.", "error")
         return False
     REAUTENTICAR.limpiar(llave)
+    return True
+
+
+def _codigo_valido(codigo: str, secreto: str | None = None) -> bool:
+    """H-14: código de 6 dígitos con el mismo límite de intentos que el acceso (DOS_PASOS)."""
+    llave = f"2fa|{current_user.id}"
+    if DOS_PASOS.tomar(llave):
+        evento_seguridad("2fa_bloqueado", current_user.usuario)
+        flash("Demasiados códigos incorrectos. Espera unos minutos.", "error")
+        return False
+    if not dos_pasos.verificar(current_user, codigo, secreto):
+        flash("Código incorrecto.", "error")
+        return False
+    DOS_PASOS.limpiar(llave)
     return True
 
 
@@ -110,18 +123,11 @@ def activar_2fa():
     if current_user.tiene_2fa:
         return redirect(url_for("cuenta.inicio"))
     if request.method == "POST":
-        llave = f"2fa|{current_user.id}"
-        if DOS_PASOS.espera(llave):
-            flash("Demasiados códigos incorrectos. Espera unos minutos.", "error")
+        # H-14: con una sesión robada no basta: hace falta también la contraseña o PIN actual.
+        if not current_user.totp_pendiente or not _reautenticar(request.form.get("clave")):
             return redirect(url_for("cuenta.activar_2fa"))
-        if not current_user.totp_pendiente or not dos_pasos.verificar(
-            current_user, request.form.get("codigo"), current_user.totp_pendiente
-        ):
-            DOS_PASOS.fallo(llave)
-            flash(
-                "El código no coincide. Revisa la hora del teléfono e inténtalo otra vez.",
-                "error",
-            )
+        if not _codigo_valido(request.form.get("codigo"), current_user.totp_pendiente):
+            flash("Revisa la hora del teléfono e inténtalo otra vez.", "info")
             return redirect(url_for("cuenta.activar_2fa"))
         current_user.totp_secreto, current_user.totp_pendiente = (
             current_user.totp_pendiente,
@@ -146,10 +152,11 @@ def activar_2fa():
 @bp.post("/cuenta/2fa/codigos")
 @con_sesion
 def nuevos_codigos():
-    if not current_user.tiene_2fa or not dos_pasos.verificar(
-        current_user, request.form.get("codigo")
+    if (
+        not current_user.tiene_2fa
+        or not _reautenticar(request.form.get("clave"))
+        or not _codigo_valido(request.form.get("codigo"))
     ):
-        flash("Código incorrecto.", "error")
         return redirect(url_for("cuenta.inicio"))
     codigos, hashes = dos_pasos.nuevos_codigos_recuperacion()
     current_user.codigos_recuperacion = hashes
@@ -164,8 +171,9 @@ def quitar_2fa():
     if exige_2fa(current_user):
         flash("Tu nivel exige verificación en dos pasos: no se puede quitar.", "error")
         return redirect(url_for("cuenta.inicio"))
-    if not dos_pasos.verificar(current_user, request.form.get("codigo")):
-        flash("Código incorrecto.", "error")
+    if not _reautenticar(request.form.get("clave")) or not _codigo_valido(
+        request.form.get("codigo")
+    ):
         return redirect(url_for("cuenta.inicio"))
     current_user.totp_secreto = current_user.codigos_recuperacion = None
     auditar("2fa_desactivada", current_user.usuario)

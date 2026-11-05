@@ -9,13 +9,31 @@ from __future__ import annotations
 from ..extensions import db
 from ..models import Config
 
-VALORES_POR_DEFECTO = {
+#: Emisor ficticio: SOLO en la demostración (H-01). En producción el emisor arranca vacío y el
+#: sistema no cobra hasta que el administrador escriba los datos reales.
+RUC_DEMO = "155000000-2-2026"
+EMISOR_DEMO = {
     "emisor.razon_social": "RESTAURANTE EL FOGON, S.A. (DEMO)",
     "emisor.nombre_comercial": "Restaurante El Fogón",
-    "emisor.ruc": "155000000-2-2026",
+    "emisor.ruc": RUC_DEMO,
     "emisor.dv": "00",
     "emisor.direccion": "Calle Central, David, Chiriquí",
     "emisor.telefono": "775-0000",
+}
+#: Diferencias de la demostración respecto de producción.
+SOLO_DEMO = {
+    **EMISOR_DEMO,
+    "fiscal.proveedor": "simulado",
+    "fiscal.folios_total": "7200",
+}
+
+VALORES_POR_DEFECTO = {
+    "emisor.razon_social": "",
+    "emisor.nombre_comercial": "",
+    "emisor.ruc": "",
+    "emisor.dv": "",
+    "emisor.direccion": "",
+    "emisor.telefono": "",
     "emisor.sucursal": "0000",
     "emisor.punto_facturacion": "001",
     "emisor.contribuyente_itbms": "1",
@@ -29,9 +47,10 @@ VALORES_POR_DEFECTO = {
     "cocina.umbral_amarillo_min": "10",
     "cocina.umbral_rojo_min": "20",
     # Facturación electrónica: «simulado» solo funciona en la demostración; «http» = PAC real.
-    "fiscal.proveedor": "simulado",
+    # En producción arranca en «ninguno» (todo en contingencia) hasta configurar el PAC.
+    "fiscal.proveedor": "ninguno",
     "fiscal.pac_url": "",
-    "fiscal.folios_total": "7200",
+    "fiscal.folios_total": "0",
     "fiscal.simular_caida": "0",
     # Impresión: id de la impresora de caja (comprobantes y gaveta) y opciones.
     "impresion.caja": "",
@@ -39,6 +58,8 @@ VALORES_POR_DEFECTO = {
     "impresion.abrir_gaveta": "1",
     # Inventario: marcar agotado un producto cuando un insumo de su receta llega a 0.
     "inventario.agotar_en_cero": "1",
+    # H-13: no enviar a cocina lo que el inventario no cubre (productos con control de inventario).
+    "inventario.bloquear_sin_existencia": "1",
     # Red local: IP o redes (CIDR) de las terminales permitidas, separadas por coma. Vacío = solo este equipo.
     "red.terminales": "",
 }
@@ -129,6 +150,11 @@ EDITABLES = [
                 "si_no",
             ),
             (
+                "inventario.bloquear_sin_existencia",
+                "No enviar pedidos que el inventario no cubre",
+                "si_no",
+            ),
+            (
                 "red.terminales",
                 "Terminales permitidas (IP o red CIDR, separadas por coma)",
                 "red",
@@ -155,12 +181,36 @@ def fijar(clave: str, valor) -> None:
         fila.valor = str(valor)
 
 
-def asegurar_valores() -> None:
+def asegurar_valores(demo: bool = False) -> None:
     """Guarda los valores por defecto que falten (no pisa lo que ya configuró el administrador)."""
-    for clave, valor in VALORES_POR_DEFECTO.items():
+    valores = {**VALORES_POR_DEFECTO, **(SOLO_DEMO if demo else {})}
+    for clave, valor in valores.items():
         if db.session.get(Config, clave) is None:
             db.session.add(Config(clave=clave, valor=valor))
     db.session.commit()
+
+
+def base_es_demo() -> bool:
+    """¿Esta base nació como demostración? (H-01: nunca se usa así en producción)."""
+    from ..models import Documento
+
+    if obtener("base.demo") == "1" or obtener("emisor.ruc") == RUC_DEMO:
+        return True
+    return Documento.query.filter_by(estado="simulado").first() is not None
+
+
+def emisor_incompleto() -> list:
+    """Datos del emisor que faltan para facturar (en producción no se cobra sin ellos)."""
+    faltan = []
+    for clave, nombre in (
+        ("emisor.razon_social", "razón social"),
+        ("emisor.ruc", "RUC"),
+        ("emisor.dv", "DV"),
+        ("emisor.direccion", "dirección"),
+    ):
+        if not (obtener(clave) or "").strip():
+            faltan.append(nombre)
+    return faltan
 
 
 def porcentaje_jubilado() -> str:

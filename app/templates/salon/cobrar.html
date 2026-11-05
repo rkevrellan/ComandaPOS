@@ -1,6 +1,9 @@
 {% extends "base.html" %} {% block titulo %}Cobrar{% endblock %} {% block
 clase_main %}pantalla-cobro{% endblock %} {% block contenido %}
 <section class="cobro-resumen tarjeta">
+  {% for aviso in avisos_fiscales %}
+  <p class="aviso aviso-error">{{ aviso }}</p>
+  {% endfor %}
   <h1>
     Cobrar
     <small

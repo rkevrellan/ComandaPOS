@@ -14,6 +14,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -77,6 +78,17 @@ class PACSimulado(ProveedorFiscal):
         )
 
 
+class _SinRedirecciones(urllib.request.HTTPRedirectHandler):
+    """H-04: una redirección del PAC NO se sigue (llevaría la credencial a otro servidor y se
+    aceptaría su respuesta). Se convierte en un error → el documento queda en contingencia."""
+
+    def redirect_request(self, *args, **kwargs):
+        return None
+
+
+_ABRIDOR = urllib.request.build_opener(_SinRedirecciones)
+
+
 class PACHttp(ProveedorFiscal):
     """Cliente HTTP genérico. Espera JSON {estado, cufe, protocolo, qr, mensaje}."""
 
@@ -101,7 +113,7 @@ class PACHttp(ProveedorFiscal):
         )
         try:
             # La URL ya pasó url_pac_valida(): solo https:// (nunca file:// ni otros esquemas).
-            with urllib.request.urlopen(  # nosec B310
+            with _ABRIDOR.open(  # nosec B310 - sin redirecciones (H-04)
                 peticion, timeout=TIEMPO_MAXIMO
             ) as resp:
                 datos = json.loads(resp.read(200_000).decode("utf-8"))
@@ -132,14 +144,12 @@ def url_pac_valida(url: str) -> bool:
 
 
 def _token_pac() -> str:
+    """Variable de entorno, o archivo protegido en la carpeta de datos (H-09). Nunca la base."""
     if os.environ.get("COMANDAPOS_PAC_TOKEN"):
         return os.environ["COMANDAPOS_PAC_TOKEN"]
-    try:  # almacén seguro del sistema (DPAPI en Windows)
-        import keyring
+    from . import secretos
 
-        return keyring.get_password("ComandaPOS", "pac") or ""
-    except Exception:  # pragma: no cover - keyring no instalado
-        return ""
+    return secretos.leer("pac")
 
 
 def proveedor() -> ProveedorFiscal | None:
@@ -220,6 +230,13 @@ def autorizar(doc, url_consulta: str = "") -> str:
     doc.intentos = (doc.intentos or 0) + 1
     prov = proveedor()
     etiqueta = f"{'NC' if isinstance(doc, NotaCredito) else 'FE'} {doc.numero}"
+    f = folios()
+    if prov is not None and not prov.simulado and f["total"] and f["disponibles"] == 0:
+        # H-11: sin folios el PAC lo rechazaría. La venta sigue en contingencia hasta comprarlos.
+        doc.estado = "contingencia"
+        doc.mensaje = "Folios agotados: compra más y súbelos en Configuración."
+        auditar("fiscal_contingencia", f"{etiqueta}: {doc.mensaje}")
+        return doc.estado
     if prov is None:
         doc.estado = "contingencia"
         doc.mensaje = (
@@ -247,6 +264,53 @@ def autorizar(doc, url_consulta: str = "") -> str:
         doc.mensaje = r.mensaje
         auditar("fiscal_rechazado", f"{etiqueta}: {r.mensaje}")
     return doc.estado
+
+
+def rechazados(limite: int = 50) -> list:
+    """Comprobantes y notas que el PAC rechazó: hay que corregirlos y reenviarlos (H-02)."""
+    return (
+        Documento.query.filter_by(estado="rechazado").order_by(Documento.id).limit(limite).all()
+        + NotaCredito.query.filter_by(estado="rechazado")
+        .order_by(NotaCredito.id)
+        .limit(limite)
+        .all()
+    )
+
+
+_RUC = re.compile(r"^[0-9A-Z]{1,10}(-[0-9A-Z]{1,10}){1,4}$")
+
+
+def corregir_receptor(doc: Documento, tipo: str, ruc: str, dv: str, nombre: str) -> None:
+    """H-02: un comprobante rechazado se corrige (receptor) y se reenvía con el MISMO número.
+
+    El PAC no lo autorizó, así que ese número no quedó registrado en la DGI. Lo que cambió queda
+    en la auditoría (antes → después). Confirmar con el PAC (SUPOSICIONES S-16)."""
+    from .calculos import ReglaNegocioError
+
+    if doc.estado != "rechazado":
+        raise ReglaNegocioError("Solo se corrige un comprobante rechazado por el PAC.")
+    nombre = " ".join((nombre or "").split())[:80]
+    antes = f"{doc.receptor_nombre} {doc.receptor_ruc} DV {doc.receptor_dv or '-'}"
+    if tipo == "consumidor":
+        doc.receptor_ruc, doc.receptor_dv = "00-00-00", None
+        doc.receptor_nombre = nombre.upper() or "CONSUMIDOR FINAL"
+    elif tipo == "contribuyente":
+        ruc = (ruc or "").strip().upper()
+        dv = (dv or "").strip()
+        if not _RUC.match(ruc):
+            raise ReglaNegocioError(
+                "El RUC no tiene un formato válido (ej. 155612345-2-2026 o 8-123-456)."
+            )
+        if not re.fullmatch(r"\d{1,2}", dv):
+            raise ReglaNegocioError("El DV son 1 o 2 dígitos.")
+        if len(nombre) < 3:
+            raise ReglaNegocioError("Escribe la razón social o el nombre del cliente.")
+        doc.receptor_ruc, doc.receptor_dv, doc.receptor_nombre = ruc, dv, nombre.upper()
+    else:
+        raise ReglaNegocioError("Elige consumidor final o contribuyente.")
+    despues = f"{doc.receptor_nombre} {doc.receptor_ruc} DV {doc.receptor_dv or '-'}"
+    doc.estado, doc.mensaje = "pendiente", None
+    auditar("fiscal_correccion", f"FE {doc.numero}: receptor {antes} → {despues}")
 
 
 def pendientes(limite: int = 50) -> list:
@@ -297,6 +361,43 @@ def folios() -> dict:
         "disponibles": disponibles,
         "alerta": alerta,
     }
+
+
+def avisos() -> list:
+    """Problemas que el cajero debe ver ANTES de cobrar (Caja y pantalla de cobro).
+
+    H-09: credencial del PAC ausente · H-11: folios bajos o agotados · H-02: rechazados ·
+    H-01: emisor incompleto o sin proveedor en producción."""
+    salida = []
+    demo = current_app.config["DEMO"]
+    tipo = configuracion.obtener("fiscal.proveedor")
+    if not demo:
+        faltan = configuracion.emisor_incompleto()
+        if faltan:
+            salida.append(
+                "Faltan datos del emisor (" + ", ".join(faltan) + "): no se puede facturar."
+            )
+        if tipo != "http":
+            salida.append(
+                "Sin PAC configurado: los comprobantes quedan en contingencia."
+            )
+    if tipo == "http":
+        if not url_pac_valida(configuracion.obtener("fiscal.pac_url")):
+            salida.append("La dirección del PAC no es válida (debe ser https://).")
+        elif not _token_pac():
+            salida.append(
+                "El PAC no tiene credencial en este equipo: todo queda en contingencia. "
+                "Guárdala en Administración → Configuración."
+            )
+    f = folios()
+    if f["total"] and f["disponibles"] == 0:
+        salida.append("Folios agotados: los comprobantes quedan en contingencia hasta comprar más.")
+    elif f["alerta"]:
+        salida.append(f"Quedan {f['disponibles']} folios: compra más al PAC.")
+    n = len(rechazados())
+    if n:
+        salida.append(f"{n} documento(s) rechazado(s) por el PAC: corrígelos y reenvíalos.")
+    return salida
 
 
 def leyenda(doc) -> str:

@@ -11,6 +11,9 @@ Flask-Login>=0.6.3
 waitress>=3.0.1
 # PDF de pre-cuenta y comprobante (con código QR incluido, sin dependencias extra)
 reportlab>=4.2
-# Credencial del PAC en el almacén seguro de Windows (Administrador de credenciales / DPAPI)
-keyring>=25.0 ; sys_platform == "win32"
+# HTTPS en la red local (H-06): servidor WSGI con TLS y certificados propios
+cheroot>=10.0
+cryptography>=43.0
+# Impresoras de Windows (win32print) — H-08
+pywin32>=306 ; sys_platform == "win32"
 pytest>=8.0

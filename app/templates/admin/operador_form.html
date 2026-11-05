@@ -56,7 +56,17 @@
         />{% else %}<input type="checkbox" name="activo" value="1" />{% endif %}
         <span>Activo</span>
       </label>
-      {% else %}
+      {% if abiertas %}
+      <label for="reasignar"
+        >Tiene {{ abiertas }} mesa(s) abierta(s). Si lo desactivas, pásalas a:</label
+      >
+      <select id="reasignar" name="reasignar">
+        <option value="">— elegir —</option>
+        {% for o in otros %}
+        <option value="{{ o.id }}">{{ o.nombre }} ({{ o.nombre_rol }})</option>
+        {% endfor %}
+      </select>
+      {% endif %} {% else %}
       <label for="credencial"
         >PIN (meseros y cajeros: 6 dígitos) o contraseña (10+ caracteres)</label
       >
@@ -100,6 +110,15 @@
     >
       {{ csrf_field() }}<button class="btn" type="submit">
         Cerrar sus sesiones abiertas
+      </button>
+    </form>
+    <form
+      method="post"
+      action="{{ url_for('admin.operador_accion', oid=op.id, accion='desbloquear') }}"
+      class="separada"
+    >
+      {{ csrf_field() }}<button class="btn" type="submit">
+        Desbloquear acceso (intentos fallidos)
       </button>
     </form>
     {% if op.tiene_2fa %}

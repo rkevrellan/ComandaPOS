@@ -59,8 +59,9 @@ contenido %}
 <section class="tarjeta separada">
   <h2>Credencial del PAC</h2>
   <p>
-    Se guarda en el almacén seguro del sistema (DPAPI en Windows), nunca en la
-    base de datos ni en pantalla. Estado:
+    Se guarda cifrada para este equipo (DPAPI en Windows) en la carpeta de datos,
+    nunca en la base de datos ni en pantalla; la usa el servidor con cualquier
+    cuenta del grupo de Windows «ComandaPOS». Estado:
     <b>{{ 'configurada' if tiene_token else 'sin configurar' }}</b>.
   </p>
   {% if almacen %}

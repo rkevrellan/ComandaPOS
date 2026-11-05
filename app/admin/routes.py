@@ -22,6 +22,7 @@ from sqlalchemy.exc import IntegrityError
 from ..config import NOMBRE_ROL, ROLES
 from ..extensions import db
 from ..models import (
+    Comanda,
     Impresora,
     Insumo,
     MovimientoInventario,
@@ -137,7 +138,11 @@ def _guardar(cat, obj, nuevo: bool):
         )
     db.session.commit()
     fem = cat.nuevo == "Nueva"
-    hecho = ("creada" if fem else "creado") if nuevo else ("guardada" if fem else "guardado")
+    hecho = (
+        ("creada" if fem else "creado")
+        if nuevo
+        else ("guardada" if fem else "guardado")
+    )
     flash(f"{cat.singular.capitalize()} {hecho}.", "ok")
     return redirect(url_for("admin.editar", clave=cat.clave, oid=obj.id))
 
@@ -326,6 +331,28 @@ def operador_editar(oid: int):
             ):
                 raise ReglaNegocioError("Debe quedar al menos un administrador activo.")
             cambios = []
+            if op.activo and not activo:
+                # H-22: sus mesas abiertas pasan a otro mesero ANTES de darlo de baja.
+                abiertas = Comanda.query.filter_by(
+                    mesero_id=op.id, estado="abierta"
+                ).all()
+                if abiertas:
+                    destino = db.session.get(
+                        Operador, f.get("reasignar", type=int) or 0
+                    )
+                    if destino is None or not destino.activo or destino.id == op.id:
+                        lugares = ", ".join(
+                            f"mesa {c.mesa.numero}" if c.mesa else f"pedido {c.numero}"
+                            for c in abiertas
+                        )
+                        raise ReglaNegocioError(
+                            f"{op.nombre} tiene {lugares} abiertas: elige a quién pasarlas."
+                        )
+                    for c in abiertas:
+                        c.mesero_id = destino.id
+                    cambios.append(
+                        f"{len(abiertas)} comanda(s) abiertas pasan a {destino.usuario}"
+                    )
             nombre = " ".join((f.get("nombre") or "").split())[:80] or op.nombre
             cargo = " ".join((f.get("cargo") or "").split())[:40] or op.cargo
             for campo, valor in (
@@ -350,11 +377,20 @@ def operador_editar(oid: int):
             flash(str(e), "error")
         return redirect(url_for("admin.operador_editar", oid=oid))
     return render_template(
-        "admin/operador_form.html", op=op, roles=_roles_asignables(), previo={}
+        "admin/operador_form.html",
+        op=op,
+        roles=_roles_asignables(),
+        previo={},
+        abiertas=Comanda.query.filter_by(mesero_id=op.id, estado="abierta").count(),
+        otros=Operador.query.filter(Operador.activo.is_(True), Operador.id != op.id)
+        .order_by(Operador.nombre)
+        .all(),
     )
 
 
-@bp.post("/operadores/<int:oid>/<any(credencial, sesiones, dos_pasos):accion>")
+@bp.post(
+    "/operadores/<int:oid>/<any(credencial, sesiones, dos_pasos, desbloquear):accion>"
+)
 @rol_requerido(*ADMIN)
 def operador_accion(oid: int, accion: str):
     op = db.get_or_404(Operador, oid)
@@ -369,6 +405,13 @@ def operador_accion(oid: int, accion: str):
         op.fijar_clave(nueva)
         auditar("clave_restablecida", f"{op.usuario} (por {current_user.usuario})")
         flash("Credencial restablecida; sus sesiones abiertas se cerraron.", "ok")
+    elif accion == "desbloquear":
+        # H-24: un administrador levanta el bloqueo por intentos fallidos de este usuario.
+        from ..seguridad import ACCESO
+
+        ACCESO.limpiar_prefijo(f"{op.usuario}|")
+        auditar("acceso_desbloqueado", f"{op.usuario} (por {current_user.usuario})")
+        flash("Acceso desbloqueado.", "ok")
     elif accion == "sesiones":
         op.version_sesion += 1
         auditar("sesiones_cerradas", f"{op.usuario} (por {current_user.usuario})")
@@ -454,12 +497,7 @@ def config():
         for _g, campos in configuracion.EDITABLES
         for clave, _e, _t in campos
     }
-    try:
-        import keyring  # noqa: F401
-
-        almacen = True
-    except ImportError:
-        almacen = False
+    almacen = True  # H-09: archivo protegido en la carpeta de datos (DPAPI en Windows)
     return render_template(
         "admin/config.html",
         grupos=configuracion.EDITABLES,
@@ -476,19 +514,19 @@ def pac_token():
     if not 8 <= len(token) <= 4000:
         flash("El token no es válido.", "error")
         return redirect(url_for("admin.config"))
-    try:
-        import keyring
+    from ..services import secretos
 
-        keyring.set_password("ComandaPOS", "pac", token)
-    except Exception:
-        flash(
-            "No hay almacén seguro disponible: define la variable de entorno COMANDAPOS_PAC_TOKEN.",
-            "error",
-        )
+    try:
+        secretos.guardar("pac", token)
+    except OSError:
+        flash("No se pudo guardar la credencial en la carpeta de datos.", "error")
         return redirect(url_for("admin.config"))
     auditar("pac_token", "credencial del PAC actualizada (no se registra su valor)")
     db.session.commit()
-    flash("Credencial del PAC guardada en el almacén seguro del sistema.", "ok")
+    flash(
+        "Credencial del PAC guardada (cifrada para este equipo; la usa cualquier cuenta del grupo ComandaPOS).",
+        "ok",
+    )
     return redirect(url_for("admin.config"))
 
 
@@ -518,7 +556,7 @@ def prueba_impresora(iid: int):
     t.raya()
     impresion.encolar(imp, f"Prueba · {imp.nombre}", t.bytes())
     db.session.commit()
-    impresos, errores = impresion.procesar_pendientes()
+    impresos, errores = impresion.procesar_pendientes(esperar=True)
     flash(
         (
             "Página de prueba enviada."

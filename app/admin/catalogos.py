@@ -98,7 +98,7 @@ class Campo:
             return n
         if self.tipo == "dinero":  # minimo=1 → debe ser mayor que 0
             return validar_precio(
-                texto, self.etiqueta.lower(), permitir_cero=self.minimo == 0
+                texto, self.etiqueta[:1].lower() + self.etiqueta[1:], permitir_cero=self.minimo == 0
             )
         if self.tipo == "cantidad":
             c = a_decimal(texto, self.etiqueta)

@@ -28,7 +28,20 @@ def test_nuevas_claves_reemplaza_todas_y_son_fuertes(app, capsys):
 
 
 def test_produccion_no_arranca_con_credenciales_de_prueba(app, monkeypatch, tmp_path):
+    from app.extensions import db
+    from app.services import configuracion
+
     monkeypatch.setenv("COMANDAPOS_PRODUCCION", "1")
+    monkeypatch.setenv("COMANDAPOS_DATA", app.config["DATOS"])
+    monkeypatch.setattr("sys.argv", ["run.py", "--no-abrir"])
+    monkeypatch.setattr("waitress.serve", lambda *a, **k: None)
+    # 1) La base de la demostración ni siquiera llega a revisar credenciales (H-01).
+    assert run.main() == run.SALIDA_BASE_DEMO
+    # 2) Una base de producción con alguien usando el PIN o la clave de prueba tampoco arranca.
+    with app.app_context():
+        configuracion.fijar("base.demo", "0")
+        configuracion.fijar("emisor.ruc", "8-888-8888")
+        db.session.commit()
     monkeypatch.setenv("COMANDAPOS_DATA", app.config["DATOS"])
     monkeypatch.setattr("sys.argv", ["run.py", "--no-abrir"])
     llamado = []

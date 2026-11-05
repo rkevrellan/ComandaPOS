@@ -126,6 +126,10 @@
         Reintentar autorización
       </button>
     </form>
+    {% endif %} {% if es_cajero and doc.estado == 'rechazado' %}
+    <form method="post" action="{{ url_for('salon.reintentar', did=doc.id) }}">
+      {{ csrf_field() }}<button class="btn" type="submit">Reenviar sin cambios</button>
+    </form>
     {% endif %} {% if es_cajero and doc.estado in ('autorizado', 'simulado') %}
     <a
       class="btn peligro"
@@ -134,6 +138,39 @@
     >
     {% endif %}
   </div>
+  {% if es_cajero and doc.estado == 'rechazado' %}
+  <section class="tarjeta separada tarjeta-alerta">
+    <h2>Corregir y reenviar</h2>
+    <p class="suave">
+      El PAC no autorizó este comprobante, así que su número no quedó registrado.
+      Corrige los datos del cliente y se reenvía con el mismo número. El cambio
+      queda en la auditoría.
+    </p>
+    <form
+      method="post"
+      action="{{ url_for('salon.corregir', did=doc.id) }}"
+      class="form-rejilla"
+      autocomplete="off"
+    >
+      {{ csrf_field() }}
+      <label
+        >Tipo de cliente
+        <select name="tipo">
+          <option value="contribuyente">Contribuyente (con RUC)</option>
+          <option value="consumidor">Consumidor final</option>
+        </select>
+      </label>
+      <label>RUC <input name="ruc" maxlength="30" value="{{ doc.receptor_ruc if doc.receptor_ruc != '00-00-00' else '' }}" /></label>
+      <label>DV <input name="dv" maxlength="2" inputmode="numeric" value="{{ doc.receptor_dv or '' }}" /></label>
+      <label class="ancho">Nombre o razón social <input name="nombre" maxlength="80" value="{{ doc.receptor_nombre }}" /></label>
+      <div class="fila-botones ancho">
+        <button class="btn btn-aceptar corto" type="submit">
+          Corregir y reenviar
+        </button>
+      </div>
+    </form>
+  </section>
+  {% endif %}
   <div class="fila-botones">
     {% if comanda.estado == 'abierta' %}
     <a class="btn" href="{{ url_for('salon.comanda', cid=comanda.id) }}"

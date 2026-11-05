@@ -1,4 +1,4 @@
-# ComandaPOS 1.0
+# ComandaPOS 1.1
 **«Del pedido a la factura, sin perder una comanda.»**
 
 Punto de venta para restaurantes de servicio a la mesa en Panamá: **mesa → comanda → cocina → cobro →
@@ -6,7 +6,8 @@ factura electrónica (CAFE) → cierre de turno**. Monolito en Python/Flask que 
 programa de escritorio (`ComandaPOS.exe` + instalador) y atiende terminales y pantallas de cocina en la red local.
 
 Programación: **Kevin Rellán** · Especificación: [`docs/PROMPT_ComandaPOS.md`](docs/PROMPT_ComandaPOS.md) ·
-Manual de uso: [`docs/MANUAL.md`](docs/MANUAL.md)
+Manual de uso: [`docs/MANUAL.md`](docs/MANUAL.md) · Novedades de la 1.1: [`docs/CAMBIOS.md`](docs/CAMBIOS.md)
+(corrige los 24 hallazgos del diagnóstico de la 1.0)
 
 ## Qué hace
 | Área | Funciones |
@@ -18,21 +19,27 @@ Manual de uso: [`docs/MANUAL.md`](docs/MANUAL.md)
 | **Caja** | Turnos con fondo, **corte X** (PDF, sin cerrar), **corte Z** con arqueo y justificación, abonos a crédito con recibo, **gaveta sin venta con motivo**, comprobantes del turno con reimpresión, cola de impresión y reenvío fiscal. |
 | **Administración** | Catálogos (productos, secciones con color, acompañamientos, áreas, salas, mesas, clientes, impresoras, insumos, notas fijas), operadores y niveles, configuración (emisor, descuentos, cocina, PAC, impresión, red), **inventario por receta** con entradas y ajustes (agota productos en cero), cola de impresiones con vista previa y página de prueba. |
 | **Reportes** | Ventas, comprobantes, ticket promedio, notas de crédito, neto, ITBMS por tasa (para la declaración), mapa de calor día/hora, formas de pago, meseros, secciones, productos, tiempos de cocina, jubilados y anulaciones. Todo exportable a **CSV** (Excel en español). |
-| **Seguridad** | 5 niveles de acceso, PIN/contraseñas con scrypt, **verificación en dos pasos** (obligatoria para administración fuera de la demo), auditoría encadenada con HMAC, CSRF, CSP estricta, lista de terminales permitidas en la red. Ver [`docs/SEGURIDAD.md`](docs/SEGURIDAD.md). |
+| **Seguridad** | 5 niveles de acceso, PIN/contraseñas con scrypt, **verificación en dos pasos** (obligatoria para administración fuera de la demo), auditoría encadenada con HMAC, CSRF, CSP estricta, **HTTPS en la red local** con certificado propio, lista de terminales permitidas, carpeta de datos solo para el grupo «ComandaPOS». Ver [`docs/SEGURIDAD.md`](docs/SEGURIDAD.md). |
 
 ## Instalar en Windows (usuario final)
-1. Ejecuta `ComandaPOS-1.0.0-instalador.exe` (lo genera `build.bat`, ver abajo).
-2. Abre **ComandaPOS** desde el escritorio. Los datos viven en `C:\ProgramData\ComandaPOS`.
-3. Antes de vender de verdad sigue [`docs/PRIMEROS_PASOS.txt`](docs/PRIMEROS_PASOS.txt) (credenciales nuevas,
-   modo producción, datos del emisor, PAC, impresoras, respaldo).
+1. Ejecuta `ComandaPOS-1.1.0-instalador.exe` (lo genera `build.bat`, ver abajo). El instalador pregunta
+   **Producción** o **Demostración**.
+2. Abre **ComandaPOS**. En producción, la primera vez pide crear el **primer administrador** (solo desde esa
+   PC) y luego activar su verificación en dos pasos. Los datos viven en `C:\ProgramData\ComandaPOS`, que solo
+   pueden abrir los Administradores y el grupo de Windows «ComandaPOS».
+3. Sigue [`docs/PRIMEROS_PASOS.txt`](docs/PRIMEROS_PASOS.txt): emisor, PAC, impresoras, usuarios, respaldo.
 
-| Acceso directo | Qué abre |
+| Acceso directo / comando | Qué hace |
 |---|---|
 | **ComandaPOS** | Ventana propia en este equipo (servidor solo local). |
-| **ComandaPOS (servidor de red local)** | Servidor para terminales y cocina en otras PC (`--red`). |
-| `ComandaPOS.exe --servidor http://IP:5000` | Terminal de otra PC (solo la ventana). |
+| **ComandaPOS (servidor de red local)** | `--red`: servidor **HTTPS** para terminales y cocina en otras PC. |
+| **Confiar en el certificado (este equipo)** | `--confiar`: instala la CA de ComandaPOS en este usuario de Windows. |
+| `ComandaPOS.exe --servidor https://IP:5000` | Terminal de otra PC (antes, instalar `ca.crt` en ella). |
 | `ComandaPOS.exe --cocina` | Pantalla de cocina. |
-| **Cambiar credenciales de prueba** | `--nuevas-claves`: reemplaza los PIN y contraseñas de la demostración. |
+| **Empezar con una base nueva** | `--nueva-base`: aparta la base actual en un respaldo (no borra nada). |
+| `ComandaPOS-servidor.exe --modo produccion` | Cambia el modo del equipo (o `demostracion`). |
+| **Cambiar credenciales de prueba** | `--nuevas-claves`. |
+| `ComandaPOS-servidor.exe --verificar` | Comprueba que el paquete trae todas sus dependencias. |
 
 ## Construir el .exe y el instalador (en tu PC con Windows)
 Requisitos: **Python 3.12+** (python.org, «Add python.exe to PATH») e **Inno Setup 6** (jrsoftware.org).
@@ -40,7 +47,7 @@ Requisitos: **Python 3.12+** (python.org, «Add python.exe to PATH») e **Inno S
 build.bat
 ```
 Hace todo y se detiene si algo falla: entorno limpio → dependencias → **pruebas** → **pip-audit** →
-**bandit** → PyInstaller (`dist\ComandaPOS\ComandaPOS.exe`) → Inno Setup (`dist\ComandaPOS-1.0.0-instalador.exe`)
+**bandit** → PyInstaller (`dist\ComandaPOS\ComandaPOS.exe`) → `--verificar` → Inno Setup (`dist\ComandaPOS-1.1.0-instalador.exe`)
 → `dist\SHA256SUMS.txt`. Sin Inno Setup queda la versión portable en `dist\ComandaPOS\`.
 Recomendado antes de distribuir: firmar los `.exe` con un certificado de firma de código (`signtool`).
 
@@ -51,11 +58,11 @@ python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
 python run.py                 &rem solo este equipo
-python run.py --red           &rem red local (configura «Terminales permitidas»)
+python run.py --red           &rem red local con HTTPS (configura «Terminales permitidas»)
 python escritorio.py          &rem como el .exe (ventana propia si está pywebview)
-python -m pytest              &rem 187 pruebas
+python -m pytest              &rem 224 pruebas
 ```
-Opciones de `run.py`: `--puerto 8080` · `--no-abrir` · `--dev` (solo 127.0.0.1) · `--red` · `--nuevas-claves`.
+Opciones de `run.py`: `--puerto 8080` · `--no-abrir` · `--dev` (solo 127.0.0.1) · `--red` · `--sin-tls` · `--confiar` · `--modo` · `--nueva-base` · `--nuevas-claves` · `--verificar`.
 Reiniciar los datos de prueba: `python seed.py --reiniciar`.
 
 ## Cuentas de demostración
@@ -67,8 +74,9 @@ Reiniciar los datos de prueba: `python seed.py --reiniciar`.
 | `admin` | Administrador | `comandapos123` |
 | `dev` | Programador (Kevin Rellán) | `comandapos123` |
 
-Solo sirven en la demostración: con `COMANDAPOS_PRODUCCION=1` el sistema **no arranca** mientras alguna
-cuenta las use. La demostración usa un PAC **simulado**: sus documentos dicen «SIN VALIDEZ FISCAL».
+Solo existen en la demostración y solo se muestran en la PC donde corre el servidor (nunca a las terminales de
+la red). La demostración usa un PAC **simulado**: sus documentos dicen «SIN VALIDEZ FISCAL». Una base de
+demostración no arranca en producción.
 
 ### Recorrido de prueba (5 minutos)
 1. `ana` → mesa 12 → 3 personas → productos (al tasajo, una nota) → **Enviar pedidos**.
@@ -83,12 +91,12 @@ cuenta las use. La demostración usa un PAC **simulado**: sus documentos dicen �
 ## Variables de entorno
 | Variable | Para qué |
 |---|---|
-| `COMANDAPOS_PRODUCCION=1` | Apaga la demostración: exige credenciales propias, 2FA para administración y un PAC real o contingencia. |
+| `COMANDAPOS_PRODUCCION` | `1` producción · `0` demostración. Si no existe, manda `modo.txt` de la carpeta de datos (lo escribe el instalador). |
 | `COMANDAPOS_DATA` | Carpeta de datos (base, clave secreta, ancla de auditoría, PDF, impresiones). |
 | `COMANDAPOS_DB` | Otra base (por ejemplo, PostgreSQL). |
 | `COMANDAPOS_SECRET` | Clave secreta fija (si no, se genera una por instalación). |
-| `COMANDAPOS_PAC_TOKEN` | Credencial del PAC si el equipo no tiene almacén seguro (en Windows va al Administrador de credenciales). |
-| `COMANDAPOS_HTTPS=1` | Cookies `Secure` y HSTS (cuando haya TLS delante). |
+| `COMANDAPOS_PAC_TOKEN` | Credencial del PAC (si no, la que se guarda desde Configuración, cifrada para el equipo). |
+| `COMANDAPOS_HTTPS=1` | Cookies `Secure` y HSTS (automático con `--red`; manual si hay un proxy con TLS delante). |
 
 ## Estructura
 ```
@@ -98,13 +106,13 @@ app/
   models.py          modelo de datos (dinero en centavos enteros)   migracion.py  columnas nuevas
   seguridad.py       @publica / @rol_requerido, limitadores, PIN y contraseñas
   services/          calculos (RN-01..06) · secuencias · pedidos · caja · fiscal (PAC) · impresion (ESC/POS)
-                     inventario · reportes · dos_pasos (TOTP) · pdf · auditoria · autorizacion · configuracion
+                     inventario · reportes · dos_pasos (TOTP) · tls (HTTPS) · secretos · pdf · auditoria · configuracion
   auth/ mesas/ salon/ cocina/ caja/ catalogos/ admin/ reportes/ cuenta/ dev/     pantallas
   templates/ static/ interfaz táctil (sin JavaScript en línea)
 escritorio.py        ComandaPOS.exe: ventana propia, una sola instancia, modo terminal y cocina
 run.py               ComandaPOS-servidor.exe: servidor local o de red, cambio de credenciales
 comandapos.spec      PyInstaller        instalador/  Inno Setup, icono, versión de Windows
 build.bat            construcción completa con pruebas y análisis de seguridad
-tests/               187 pruebas automáticas
-docs/                MANUAL, FISCAL, SEGURIDAD, SUPOSICIONES, PENDIENTES, PRIMEROS_PASOS, capturas y PDF de ejemplo
+tests/               224 pruebas automáticas
+docs/                MANUAL, FISCAL, SEGURIDAD, CAMBIOS, SUPOSICIONES, PENDIENTES, PRIMEROS_PASOS, capturas y PDF
 ```

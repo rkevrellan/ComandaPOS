@@ -1499,3 +1499,8 @@ pre.ticket { background: #f8fafc; color: #0f172a; border-radius: 8px; padding: .
 .fila-botones .btn-aceptar.corto { width: auto; min-width: 180px; }
 
 .pares dd code { overflow-wrap: anywhere; } /* el CUFE es una sola «palabra» de 60+ caracteres */
+
+/* Formularios en rejilla dentro de tarjetas angostas: los campos no se salen de la tarjeta */
+.form-rejilla > * { min-width: 0; }
+.form-rejilla input, .form-rejilla select { width: 100%; box-sizing: border-box; }
+.form-rejilla .opcion-check input { width: 22px; }

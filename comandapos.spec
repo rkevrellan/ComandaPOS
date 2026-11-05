@@ -22,7 +22,9 @@ OCULTOS = (
     collect_submodules("app")
     + collect_submodules("waitress")
     + collect_submodules("reportlab.graphics.barcode")
-    + ["seed", "run", "sqlalchemy.dialects.sqlite", "keyring.backends"]
+    + collect_submodules("cheroot")
+    + ["seed", "run", "sqlalchemy.dialects.sqlite"]
+    + (["win32print", "win32api", "pywintypes"] if os.name == "nt" else [])
 )
 FUERA = ["tkinter", "pytest", "_pytest", "IPython", "matplotlib", "numpy", "PIL.ImageQt"]
 

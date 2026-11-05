@@ -1,30 +1,41 @@
-﻿ComandaPOS 1.0 - Primeros pasos
+﻿ComandaPOS 1.1 - Primeros pasos
 ================================
 
-ComandaPOS quedó instalado. Abre "ComandaPOS" desde el escritorio para probarlo con los
-datos de demostración (usuario admin, contraseña comandapos123; mesera ana, PIN 246810).
-En la demostración los documentos dicen "SIN VALIDEZ FISCAL".
-
-ANTES DE VENDER DE VERDAD
-1. Menú Inicio > ComandaPOS > "Cambiar credenciales de prueba". Anota las nuevas.
-2. Variable de entorno del sistema COMANDAPOS_PRODUCCION = 1 (Configuración avanzada del
-   sistema > Variables de entorno) y reinicia ComandaPOS.
-3. Entra como administrador: el sistema te pedirá activar la verificación en dos pasos
-   (Google Authenticator, Microsoft Authenticator u otra). Guarda los códigos de recuperación.
-4. Administración > Configuración: razón social, RUC, DV, dirección, sucursal, punto de
+EN PRODUCCIÓN (lo que eligió en el instalador)
+1. Abra "ComandaPOS" EN ESTA PC. La primera vez pide crear el primer administrador
+   (usuario, nombre y contraseña de 10+ caracteres con letras y números). Puede cargar
+   salas, mesas y un menú de ejemplo para editarlos (sin ventas ni usuarios de prueba).
+2. Entre con ese usuario: el sistema pide activar la verificación en dos pasos
+   (Google Authenticator, Microsoft Authenticator u otra). Guarde los códigos de recuperación.
+3. Administración > Configuración: razón social, RUC, DV, dirección, sucursal, punto de
    facturación, tipo de establecimiento (descuento de jubilado) y folios comprados.
-5. Facturación electrónica: "PAC por HTTP", la URL https del PAC contratado y su credencial
-   (se guarda en el Administrador de credenciales de Windows). Lee docs\FISCAL.md.
-6. Administración > Impresoras: la de caja y una por área de cocina. Usa "Página de prueba".
-7. Carga tu menú (Productos, Secciones, Acompañamientos) y tus mesas.
-8. Respaldo diario de C:\ProgramData\ComandaPOS fuera del equipo.
+   Sin estos datos el sistema no factura.
+4. Facturación electrónica: "PAC por HTTP", la URL https del PAC y su credencial (se guarda
+   cifrada para este equipo). Lea docs\FISCAL.txt. Mientras tanto, todo queda en contingencia.
+5. Administración > Operadores: meseros (PIN), cajeros (PIN), supervisores (contraseña).
+6. Administración > Impresoras: la de caja y una por área. Use "Página de prueba".
+7. Respaldo diario de C:\ProgramData\ComandaPOS fuera del equipo.
 
-VARIAS PC
-- PC de caja: "ComandaPOS (servidor de red local)". Si se instaló la regla de firewall,
-  solo se permite en redes privadas.
+USUARIOS DE WINDOWS
+- Solo el grupo de Windows "ComandaPOS" (y los administradores) puede abrir la carpeta de
+  datos. Quien instaló ya está dentro. Para agregar la cuenta del cajero (como administrador):
+      net localgroup ComandaPOS NOMBRE_DE_USUARIO /add
+  El cambio vale desde el próximo inicio de sesión de esa cuenta.
+
+VARIAS PC (red local, con HTTPS)
+- PC de caja: "ComandaPOS (servidor de red local)". Muestra su dirección https y la huella
+  de su certificado. Ejecute también "Confiar en el certificado (este equipo)".
 - Configuración > Terminales permitidas: IP de las otras PC o la red (ej. 192.168.1.0/24).
-- Terminales: ComandaPOS.exe --servidor http://IP-DE-CAJA:5000   (cocina: agrega --cocina)
+- En cada terminal, una sola vez: copie "ca.crt" (Menú Inicio > ComandaPOS > Certificado para
+  las terminales), doble clic > Instalar certificado > Usuario actual > "Entidades de
+  certificación raíz de confianza". Compare la huella con la del servidor.
+- Terminal:  ComandaPOS.exe --servidor https://IP-DE-CAJA:5000   (cocina: agregue --cocina)
+
+DEMOSTRACIÓN
+- Datos de prueba (admin / comandapos123; mesera ana, PIN 246810). Documentos SIN validez
+  fiscal. Para pasar a producción: "Empezar con una base nueva" y
+  ComandaPOS-servidor.exe --modo produccion.
 
 AYUDA
-docs\MANUAL.md (uso por puesto) - docs\SEGURIDAD.md - docs\FISCAL.md
+docs\MANUAL.txt - docs\SEGURIDAD.txt - docs\FISCAL.txt
 Los datos NO se borran al desinstalar: los comprobantes fiscales deben conservarse.

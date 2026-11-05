@@ -35,6 +35,13 @@ hasta.isoformat()} %}
     <small>ITBMS neto</small><b>B/. {{ r.itbms_total | dinero }}</b>
   </div>
 </div>
+{% if r.rechazados[0] %}
+<p class="aviso aviso-error">
+  {{ r.rechazados[0] }} comprobante(s) rechazado(s) por el PAC por B/. {{
+  r.rechazados[1] | dinero }} no se cuentan como ventas ni en el ITBMS hasta que
+  se corrijan y autoricen (Caja → Facturación electrónica).
+</p>
+{% endif %}
 
 <div class="tarjetas">
   <section class="tarjeta tarjeta-ancha">
@@ -295,7 +302,7 @@ hasta.isoformat()} %}
         <tr>
           <td>{{ '%010d' % d.numero }}</td>
           <td>{{ d.emitido_en | fecha }}</td>
-          <td>{{ c }}</td>
+          <td>{{ enmascarar(c) }}</td>
           <td>{{ n }}</td>
           <td class="num">{{ d.descuento_jubilado | dinero }}</td>
           <td class="num">{{ d.total | dinero }}</td>

@@ -24,7 +24,7 @@ from ..models import (
     TrabajoImpresion,
     Turno,
 )
-from ..seguridad import desde, rol_requerido
+from ..seguridad import ip_cliente, desde, rol_requerido
 from ..services import caja, configuracion, fiscal, impresion, pdf
 from ..services.calculos import ReglaNegocioError
 
@@ -79,6 +79,9 @@ def inicio():
         anteriores=anteriores,
         pendientes=fiscal.pendientes(),
         folios=fiscal.folios(),
+        avisos_fiscales=fiscal.avisos(),
+        pendientes_cierre=caja.pendientes_de_cierre() if turno else [],
+        rechazados=fiscal.rechazados(),
         impresiones=impresiones,
         impresora_caja=impresion.impresora_de_caja(),
     )
@@ -105,11 +108,23 @@ def cerrar():
         flash("No hay turno abierto.", "info")
         return redirect(url_for("caja.inicio"))
     try:
+        autorizador = None
+        if caja.pendientes_de_cierre():
+            from ..services import autorizacion
+
+            autorizador = autorizacion.autorizar(
+                "supervisor",
+                current_user,
+                request.form.get("sup_usuario"),
+                request.form.get("sup_clave"),
+                ip_cliente(),
+            )
         caja.cerrar_turno(
             turno,
             current_user,
             request.form.get("contado"),
             request.form.get("justificacion"),
+            autorizador,
         )
         db.session.commit()
     except ReglaNegocioError as e:
@@ -180,7 +195,7 @@ def gaveta():
                 impresion.Ticket().gaveta().bytes(cortar=False),
             )
         db.session.commit()
-        impresion.procesar_pendientes()
+        impresion.despertar()
         flash(
             (
                 "Gaveta abierta (queda en la auditoría)."
@@ -211,7 +226,7 @@ def reenviar():
 def reimprimir():
     TrabajoImpresion.query.filter_by(estado="error").update({"intentos": 0})
     db.session.commit()
-    impresos, errores = impresion.procesar_pendientes()
+    impresos, errores = impresion.procesar_pendientes(esperar=True)
     flash(
         f"Impresos: {impresos}. Con error: {errores}.", "ok" if not errores else "error"
     )
@@ -249,7 +264,7 @@ def abono(cid: int):
                     impresion.Ticket().gaveta().bytes(cortar=False),
                 )
                 db.session.commit()
-                impresion.procesar_pendientes()
+                impresion.despertar()
         flash(f"Abono registrado. Recibo {a.recibo:06d}.", "ok")
         return redirect(url_for("caja.abono", cid=cid, recibo=a.id))
     deuda = caja.credito_usado(cliente)

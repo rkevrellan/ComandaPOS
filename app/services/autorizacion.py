@@ -18,7 +18,7 @@ def autorizar(
 ) -> Operador:
     if solicitante.puede(rol_minimo):
         return solicitante
-    if AUTORIZACION.espera(terminal):
+    if AUTORIZACION.tomar(terminal):  # H-16: revisa y cuenta en un paso
         raise ReglaNegocioError(
             "Demasiadas autorizaciones fallidas. Espera unos minutos."
         )
@@ -30,7 +30,6 @@ def autorizar(
     else:
         valido = op.verificar_clave(clave or "")
     if not (valido and op.activo and op.puede(rol_minimo)):
-        AUTORIZACION.fallo(terminal)
         raise ReglaNegocioError(
             "La autorización no es válida: hace falta un usuario con nivel "
             f"{rol_minimo} o superior y su clave."

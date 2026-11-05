@@ -13,7 +13,7 @@ from __future__ import annotations
 import os
 
 NOMBRE = "ComandaPOS"
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 LEMA = "Del pedido a la factura, sin perder una comanda."
 
 #: Niveles de seguridad del sistema de referencia, de menor a mayor.
@@ -51,6 +51,29 @@ def carpeta_datos(respaldo: str) -> str:
     return ruta
 
 
-def modo_demo() -> bool:
-    """La demostración está encendida salvo que se pida producción explícitamente."""
-    return os.environ.get("COMANDAPOS_PRODUCCION", "") != "1"
+ARCHIVO_MODO = "modo.txt"
+
+
+def modo_demo(datos: str | None = None) -> bool:
+    """¿Demostración o producción? (H-03)
+
+    1. La variable COMANDAPOS_PRODUCCION manda si existe («1» producción, «0» demostración).
+    2. Si no, el archivo «modo.txt» de la carpeta de datos (lo escribe el instalador o
+       `ComandaPOS-servidor.exe --modo produccion`).
+    3. Sin ninguno de los dos (desarrollo): demostración.
+    """
+    variable = os.environ.get("COMANDAPOS_PRODUCCION")
+    if variable in ("0", "1"):
+        return variable == "0"
+    if datos:
+        try:
+            with open(os.path.join(datos, ARCHIVO_MODO), encoding="utf-8") as f:
+                return f.read().strip().lower() != "produccion"
+        except OSError:
+            pass
+    return True
+
+
+def fijar_modo(datos: str, produccion: bool) -> None:
+    with open(os.path.join(datos, ARCHIVO_MODO), "w", encoding="utf-8") as f:
+        f.write("produccion\n" if produccion else "demostracion\n")

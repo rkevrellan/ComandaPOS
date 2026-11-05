@@ -146,15 +146,57 @@ def evento_seguridad(tipo: str, detalle: str = "") -> None:
 
 # --------------------------------------------------------------------------- fuerza bruta
 class Limitador:
-    """Ventana deslizante en memoria, segura entre hilos y con memoria acotada (LRU)."""
+    """Ventana deslizante segura entre hilos, con memoria acotada (LRU) y persistente.
+
+    H-16: `tomar()` revisa Y cuenta el intento en un solo paso bajo el candado, así que peticiones
+    simultáneas no pasan el límite. Con `persistir()` el estado se guarda en la carpeta de datos y
+    sobrevive a un reinicio del programa (reiniciar no borra un bloqueo).
+    """
 
     MAX_CLAVES = 20000
 
-    def __init__(self, maximo: int, ventana_seg: int):
-        self.maximo, self.ventana = maximo, ventana_seg
+    def __init__(self, maximo: int, ventana_seg: int, nombre: str = ""):
+        self.maximo, self.ventana, self.nombre = maximo, ventana_seg, nombre
         self._hits: OrderedDict = OrderedDict()
         self._lock = threading.Lock()
+        self._archivo: str | None = None
 
+    # ------------------------------------------------------------------ persistencia
+    def persistir(self, carpeta: str) -> None:
+        import json
+        import os
+
+        os.makedirs(carpeta, exist_ok=True)
+        self._archivo = os.path.join(carpeta, f"limite-{self.nombre}.json")
+        try:
+            with open(self._archivo, encoding="utf-8") as f:
+                datos = json.load(f)
+        except (OSError, ValueError):
+            return
+        ahora = time.time()
+        with self._lock:
+            for clave, marcas in (datos if isinstance(datos, dict) else {}).items():
+                vigentes = [float(m) for m in marcas if ahora - float(m) <= self.ventana][-self.maximo :]
+                if vigentes:
+                    self._hits[str(clave)[:200]] = deque(vigentes)
+
+    def _guardar(self) -> None:
+        """Se llama con el candado tomado."""
+        if not self._archivo:
+            return
+        import json
+        import os
+
+        temporal = self._archivo + ".tmp"
+        try:
+            fd = os.open(temporal, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump({k: list(v) for k, v in self._hits.items()}, f)
+            os.replace(temporal, self._archivo)
+        except OSError:  # pragma: no cover - el límite sigue funcionando en memoria
+            pass
+
+    # ------------------------------------------------------------------ operaciones
     def _limpiar(self, clave, ahora):
         q = self._hits.get(clave)
         if q is None:
@@ -165,19 +207,43 @@ class Limitador:
             del self._hits[clave]
         return q
 
+    def _anotar(self, clave, ahora, q) -> None:
+        q.append(ahora)
+        self._hits[clave] = q
+        self._hits.move_to_end(clave)
+        while len(self._hits) > self.MAX_CLAVES:
+            self._hits.popitem(last=False)
+
+    def tomar(self, clave: str) -> int:
+        """Atómico: si queda cupo, cuenta este intento y devuelve 0; si no, los segundos de espera."""
+        with self._lock:
+            ahora = time.time()
+            q = self._limpiar(clave, ahora)
+            if len(q) >= self.maximo:
+                return max(1, int(self.ventana - (ahora - q[0])))
+            self._anotar(clave, ahora, q)
+            self._guardar()
+            return 0
+
+    def devolver(self, clave: str) -> None:
+        """El intento tomado salió bien: no cuenta como fallo."""
+        with self._lock:
+            q = self._hits.get(clave)
+            if q:
+                q.pop()
+                if not q:
+                    del self._hits[clave]
+                self._guardar()
+
     def fallo(self, clave: str) -> None:
         with self._lock:
-            ahora = time.monotonic()
-            q = self._limpiar(clave, ahora)
-            q.append(ahora)
-            self._hits[clave] = q
-            self._hits.move_to_end(clave)
-            while len(self._hits) > self.MAX_CLAVES:
-                self._hits.popitem(last=False)
+            ahora = time.time()
+            self._anotar(clave, ahora, self._limpiar(clave, ahora))
+            self._guardar()
 
     def espera(self, clave: str) -> int:
         with self._lock:
-            ahora = time.monotonic()
+            ahora = time.time()
             q = self._limpiar(clave, ahora)
             if len(q) < self.maximo:
                 return 0
@@ -185,23 +251,32 @@ class Limitador:
 
     def limpiar(self, clave: str) -> None:
         with self._lock:
-            self._hits.pop(clave, None)
+            if self._hits.pop(clave, None) is not None:
+                self._guardar()
+
+    def limpiar_prefijo(self, prefijo: str) -> None:
+        """H-24: desbloquear a un usuario en todas las terminales («usuario|»)."""
+        with self._lock:
+            for clave in [k for k in self._hits if k.startswith(prefijo)]:
+                del self._hits[clave]
+            self._guardar()
 
     def reiniciar(self) -> None:
         with self._lock:
             self._hits.clear()
+            self._guardar()
 
 
 #: 5 intentos fallidos por usuario+terminal cada 10 minutos.
-ACCESO = Limitador(5, 600)
+ACCESO = Limitador(5, 600, "acceso")
 #: 30 intentos por terminal cada 10 minutos, sin importar el usuario (se revisa ANTES del hash).
-ACCESO_TERMINAL = Limitador(30, 600)
+ACCESO_TERMINAL = Limitador(30, 600, "terminal")
 #: 5 autorizaciones de supervisor fallidas por terminal cada 10 minutos (fase 2: anulaciones).
-AUTORIZACION = Limitador(5, 600)
+AUTORIZACION = Limitador(5, 600, "autorizacion")
 #: 5 códigos de verificación en dos pasos fallidos por cuenta cada 10 minutos.
-DOS_PASOS = Limitador(5, 600)
+DOS_PASOS = Limitador(5, 600, "dos_pasos")
 #: 5 claves actuales incorrectas por cuenta cada 10 minutos al cambiar la propia clave.
-REAUTENTICAR = Limitador(5, 600)
+REAUTENTICAR = Limitador(5, 600, "reautenticar")
 
 
 # --------------------------------------------------------------------------- PIN y contraseñas
@@ -284,3 +359,9 @@ def validar_credencial(operador, valor: str) -> list:
     if operador.usa_pin:
         return validar_pin(valor)
     return validar_clave(valor, operador.usuario, operador.nombre)
+
+
+def persistir_limitadores(carpeta: str) -> None:
+    """H-16: los bloqueos por intentos sobreviven a un reinicio del programa."""
+    for lim in (ACCESO, ACCESO_TERMINAL, AUTORIZACION, DOS_PASOS, REAUTENTICAR):
+        lim.persistir(carpeta)

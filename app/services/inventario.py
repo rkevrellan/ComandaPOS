@@ -50,6 +50,38 @@ def _revisar_agotados(insumo_ids) -> None:
             auditar("reactivado_auto", f"{p.descripcion}: hay existencia otra vez")
 
 
+def faltantes(lineas) -> list:
+    """H-13: insumos que NO alcanzan para estas líneas (suma de recetas). [(insumo, necesita)]"""
+    necesita = {}
+    for ln in lineas:
+        # Una línea recién agregada aún no tiene cargada la relación: se busca por su id.
+        producto = ln.producto or (
+            db.session.get(Producto, ln.producto_id) if ln.producto_id else None
+        )
+        if producto is None or producto.condicion != "activo_cinv" or ln.estado == "ANU":
+            continue
+        for item in producto.receta:
+            cantidad = (item.cantidad * ln.cantidad).quantize(Decimal("0.001"))
+            necesita[item.insumo] = necesita.get(item.insumo, Decimal("0")) + cantidad
+    return [(ins, n) for ins, n in necesita.items() if n > ins.existencia]
+
+
+def revisar_existencia(lineas) -> None:
+    """Bloquea (por defecto) un pedido que la existencia no cubre, con el detalle de lo que falta."""
+    from .calculos import ReglaNegocioError
+
+    if configuracion.obtener("inventario.bloquear_sin_existencia", "1") != "1":
+        return
+    faltan = faltantes(lineas)
+    if faltan:
+        detalle = "; ".join(
+            f"{ins.nombre}: hay {ins.existencia.normalize()} {ins.unidad}, "
+            f"se necesitan {n.normalize()}"
+            for ins, n in faltan
+        )
+        raise ReglaNegocioError(f"No alcanza el inventario — {detalle}.")
+
+
 def consumir(lineas, operador) -> int:
     """RN-14: descuenta la receta de cada línea enviada. Devuelve cuántos movimientos hizo."""
     movimientos, tocados = 0, set()

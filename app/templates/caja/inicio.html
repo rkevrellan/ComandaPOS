@@ -18,7 +18,7 @@ contenido %}
 </div>
 
 <div class="tarjetas">
-  <section class="tarjeta {{ 'tarjeta-alerta' if folios.alerta else '' }}">
+  <section class="tarjeta {{ 'tarjeta-alerta' if avisos_fiscales else '' }}">
     <h2>Facturación electrónica</h2>
     <dl class="pares">
       <dt>Folios disponibles</dt>
@@ -31,8 +31,24 @@ contenido %}
       <dt>Pendientes de autorizar</dt>
       <dd>{{ pendientes | length }}</dd>
     </dl>
-    {% if folios.alerta %}
-    <p class="aviso aviso-error">Quedan pocos folios: compra más al PAC.</p>
+    {% for aviso in avisos_fiscales %}
+    <p class="aviso aviso-error">{{ aviso }}</p>
+    {% endfor %} {% if rechazados %}
+    <ul class="lista-simple">
+      {% for d in rechazados[:6] %}
+      <li>
+        {% if d.__class__.__name__ == 'Documento' %}<a
+          class="enlace"
+          href="{{ url_for('salon.documento', did=d.id) }}"
+          >{{ d.tipo_nombre }} {{ '%010d' % d.numero }}</a
+        >{% else %}<a
+          class="enlace"
+          href="{{ url_for('salon.ver_nota', nid=d.id) }}"
+          >{{ d.tipo_nombre }} {{ '%010d' % d.numero }}</a
+        >{% endif %} · rechazado · {{ d.mensaje or '' }}
+      </li>
+      {% endfor %}
+    </ul>
     {% endif %} {% if pendientes %}
     <ul class="lista-simple">
       {% for d in pendientes[:6] %}
@@ -177,6 +193,22 @@ contenido %}
         >Justificación (si la diferencia pasa de B/. 1.00)</label
       >
       <input id="justificacion" name="justificacion" maxlength="200" />
+      {% if pendientes_cierre %}
+      <div class="aviso aviso-error">
+        Quedan pendientes:
+        <ul class="lista-simple">
+          {% for p in pendientes_cierre %}<li>{{ p }}</li>{% endfor %}
+        </ul>
+        Resuélvelos antes de cerrar (cobra las mesas, corrige o reenvía los
+        documentos) o que un supervisor autorice el cierre (quedará
+        en la auditoría).
+      </div>
+      {% if not current_user.puede('supervisor') %}
+      <label for="sup_usuario">Usuario del supervisor</label>
+      <input id="sup_usuario" name="sup_usuario" maxlength="30" autocomplete="off" />
+      <label for="sup_clave">Clave del supervisor</label>
+      <input id="sup_clave" name="sup_clave" type="password" maxlength="128" autocomplete="off" />
+      {% endif %} {% endif %}
       <button class="btn peligro" type="submit">Cerrar turno</button>
     </form>
   </section>

@@ -9,7 +9,15 @@ import pytest
 from app import create_app
 from app import seguridad
 from app.extensions import db
-from app.seguridad import ACCESO, ACCESO_TERMINAL, CLAVE_DEMO, PIN_DEMO
+from app.seguridad import (
+    ACCESO,
+    ACCESO_TERMINAL,
+    AUTORIZACION,
+    CLAVE_DEMO,
+    DOS_PASOS,
+    PIN_DEMO,
+    REAUTENTICAR,
+)
 
 
 @pytest.fixture
@@ -22,8 +30,8 @@ def app(tmp_path, monkeypatch):
         from seed import poblar
 
         poblar()
-    ACCESO.reiniciar()
-    ACCESO_TERMINAL.reiniciar()
+    for limitador in (ACCESO, ACCESO_TERMINAL, AUTORIZACION, DOS_PASOS, REAUTENTICAR):
+        limitador.reiniciar()
     seguridad._ULTIMO_EVENTO.clear()
     seguridad.EVENTOS.clear()
     yield aplicacion

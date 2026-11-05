@@ -8,15 +8,23 @@
 Cobrar (EXE) ──► venta guardada (transacción) ──► llamada al PAC (fuera de la transacción)
                                                      │
                      ┌───────────────────────────────┼─────────────────────────────┐
-              autorizado                         rechazado                 sin respuesta / sin PAC
-     CUFE, protocolo y QR del PAC        mensaje del PAC, «NO ENTREGAR»     «contingencia»: la venta sigue,
-     PDF ticket o carta con QR           se corrige y se emite de nuevo      reenvío automático y desde Caja
+              autorizado                         rechazado                 sin respuesta / sin PAC /
+     CUFE, protocolo y QR del PAC        mensaje del PAC, «NO ENTREGAR»     folios agotados → «contingencia»:
+     PDF ticket o carta con QR           Corregir y reenviar (mismo número)  la venta sigue; reenvío automático
 ```
 - **El sistema nunca inventa un CUFE.** Solo muestra el que devuelve el PAC.
 - La venta **no se detiene** si el PAC o internet fallan: el documento queda en contingencia con su leyenda
   («EMITIDO EN CONTINGENCIA — PENDIENTE DE AUTORIZACIÓN»), y se reenvía al cobrar otras ventas o con
   **Caja → Reenviar al PAC**. Cada intento queda en la auditoría.
 - Numeración atómica por punto de facturación: sin duplicados ni huecos aunque cobren varias terminales.
+- **Rechazado por el PAC** (por ejemplo, RUC del cliente mal escrito): Caja lo avisa con un enlace. En el
+  comprobante, **Corregir y reenviar** cambia los datos del cliente y lo reenvía con el **mismo número** (el PAC
+  no lo registró); el cambio queda en la auditoría (antes → después). **Reenviar sin cambios** sirve si el
+  rechazo fue pasajero. Confirmar con el PAC que acepta reenviar el mismo número (S-16).
+- Los reportes y el ITBMS **no cuentan** los rechazados hasta que se autorizan; aparecen aparte.
+- Antes de cobrar, la pantalla de cobro y Caja muestran los avisos: faltan datos del emisor, sin PAC,
+  sin credencial, pocos folios o agotados, rechazados pendientes. En producción **no se factura** sin RUC,
+  DV, razón social y dirección del emisor.
 
 ## 2. Documentos
 | Tipo | Código | Cuándo |
@@ -56,13 +64,18 @@ entre este cuerpo y el formato del PAC (o un pequeño servicio intermedio). Paso
 2. Adapta `PACHttp.emitir()` o crea una clase hija que traduzca el cuerpo y la respuesta. No cambies nada más:
    contingencia, reintentos, auditoría, PDF y QR ya funcionan con `ResultadoFiscal`.
 3. **Administración → Configuración → Facturación electrónica**: «PAC por HTTP» y la URL `https://`.
-4. La credencial: en Windows se guarda en el Administrador de credenciales (pantalla de Configuración);
-   si no, variable de entorno `COMANDAPOS_PAC_TOKEN`. **Nunca** en la base de datos.
-5. Prueba en el ambiente del PAC: un consumidor final, un contribuyente, una nota de crédito y una caída
-   (desconecta el cable) para ver la contingencia y el reenvío.
+4. La credencial: desde Configuración se guarda **cifrada para este equipo** (DPAPI de máquina) en la carpeta de
+   datos, que solo puede abrir el grupo «ComandaPOS»; la usa el servidor con cualquier cuenta de ese grupo. O
+   variable de entorno `COMANDAPOS_PAC_TOKEN`. **Nunca** en la base de datos.
+5. Prueba en el ambiente del PAC: un consumidor final, un contribuyente, una nota de crédito, un rechazo (RUC
+   inválido → Corregir y reenviar) y una caída (desconecta el cable) para ver la contingencia y el reenvío.
+6. El cliente **no sigue redirecciones**: si la URL del PAC responde con 3xx, el documento queda en
+   contingencia. Usa la URL final que indique el PAC.
 
 ## 5. Folios
-**Configuración → Folios comprados.** La caja muestra disponibles y usados, y alerta cuando queda menos del 10 %.
+**Configuración → Folios comprados.** Caja y la pantalla de cobro avisan cuando queda menos del 10 %. Con los
+folios **agotados**, los comprobantes no se mandan al PAC (los rechazaría): quedan en contingencia con el mensaje
+«Folios agotados» y se autorizan al subir el número de folios comprados y pulsar **Reenviar al PAC**.
 
 ## 6. ITBMS
 Por línea, half-up a 2 decimales; el total es la suma de las líneas (cuadra con el detalle). Tasas 0/7/10/15 % por

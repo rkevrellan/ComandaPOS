@@ -278,7 +278,7 @@ def _activar_2fa(app, c, usuario):
         op = Operador.query.filter_by(usuario=usuario).one()
         pendiente = op.totp_pendiente
     assert pendiente
-    r = post(c, "/cuenta/2fa", codigo=dos_pasos.codigo_actual(pendiente))
+    r = post(c, "/cuenta/2fa", codigo=dos_pasos.codigo_actual(pendiente), clave=CLAVE_DEMO)
     assert r.status_code == 200
     codigos = re.findall(r"[A-Z2-9]{5}-[A-Z2-9]{5}", r.get_data(as_text=True))
     assert len(set(codigos)) == 8
@@ -341,10 +341,10 @@ def test_codigos_de_2fa_se_limitan(app, como):
     c = como("jose")
     c.get("/cuenta/2fa")
     for _ in range(12):
-        post(c, "/cuenta/2fa", codigo="000000")
+        post(c, "/cuenta/2fa", codigo="000000", clave=CLAVE_DEMO)
     with app.app_context():
         pendiente = Operador.query.filter_by(usuario="jose").one().totp_pendiente
-    r = post(c, "/cuenta/2fa", codigo=dos_pasos.codigo_actual(pendiente))
+    r = post(c, "/cuenta/2fa", codigo=dos_pasos.codigo_actual(pendiente), clave=CLAVE_DEMO)
     assert r.status_code == 302  # bloqueado aunque el código sea bueno
     with app.app_context():
         assert not Operador.query.filter_by(usuario="jose").one().tiene_2fa
@@ -362,7 +362,7 @@ def test_fuera_de_la_demo_el_admin_debe_activar_2fa(app, como):
     # y no la puede quitar
     with app.app_context():
         secreto = Operador.query.filter_by(usuario="admin").one().totp_secreto
-    post(c, "/cuenta/2fa/quitar", codigo=dos_pasos.codigo_actual(secreto, 0))
+    post(c, "/cuenta/2fa/quitar", codigo=dos_pasos.codigo_actual(secreto, 0), clave=CLAVE_DEMO)
     with app.app_context():
         assert Operador.query.filter_by(usuario="admin").one().tiene_2fa
 
@@ -451,3 +451,32 @@ def test_terminal_fuera_de_la_lista_se_rechaza(app):
     otra_red = app.test_client()
     otra_red.environ_base["REMOTE_ADDR"] = "10.0.0.7"
     assert otra_red.get("/acceso").status_code == 403
+
+
+def test_activar_2fa_exige_la_clave_actual(app, como):
+    """H-14: con una sesión robada no se registra otro autenticador."""
+    c = como("jose")
+    c.get("/cuenta/2fa")
+    with app.app_context():
+        pendiente = Operador.query.filter_by(usuario="jose").one().totp_pendiente
+    r = post(c, "/cuenta/2fa", codigo=dos_pasos.codigo_actual(pendiente))  # sin clave
+    assert r.status_code == 302
+    r = post(c, "/cuenta/2fa", codigo=dos_pasos.codigo_actual(pendiente), clave="equivocada")
+    with app.app_context():
+        assert not Operador.query.filter_by(usuario="jose").one().tiene_2fa
+
+
+def test_nuevos_codigos_y_quitar_exigen_clave_y_tienen_limite(app, como):
+    c = como("jose")
+    secreto, _codigos = _activar_2fa(app, c, "jose")
+    r = post(c, "/cuenta/2fa/codigos", codigo=dos_pasos.codigo_actual(secreto))  # sin clave
+    assert r.status_code == 302
+    for _ in range(6):  # fuerza bruta del código con la clave correcta
+        post(c, "/cuenta/2fa/quitar", codigo="000000", clave=CLAVE_DEMO)
+    from app.seguridad import DOS_PASOS
+
+    with app.app_context():
+        oid = Operador.query.filter_by(usuario="jose").one().id
+    assert DOS_PASOS.espera(f"2fa|{oid}") > 0
+    with app.app_context():
+        assert Operador.query.filter_by(usuario="jose").one().tiene_2fa

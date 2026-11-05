@@ -108,7 +108,7 @@ def create_app(config: dict | None = None) -> Flask:
             "COMANDAPOS_DB", "sqlite:///" + os.path.join(datos, "comandapos.db")
         ),
         SQLALCHEMY_ENGINE_OPTIONS={"pool_pre_ping": True},
-        DEMO=modo_demo(),
+        DEMO=modo_demo(datos),
         CSRF_ENABLED=True,
         SESSION_COOKIE_NAME="__Host-comandapos" if https else "comandapos",
         SESSION_COOKIE_HTTPONLY=True,
@@ -121,6 +121,12 @@ def create_app(config: dict | None = None) -> Flask:
         TEMPLATES_AUTO_RELOAD=False,
     )
     app.config.update(config)
+    if not app.config.get("TESTING"):
+        from .seguridad import persistir_limitadores
+
+        persistir_limitadores(os.path.join(datos, "limites"))
+    # H-07: imprimir en un hilo aparte (en las pruebas, en el momento).
+    app.config.setdefault("IMPRESION_EN_SEGUNDO_PLANO", not app.config.get("TESTING"))
 
     db.init_app(app)
     login_manager.init_app(app)
@@ -156,7 +162,7 @@ def create_app(config: dict | None = None) -> Flask:
         from .services import auditoria, configuracion, secuencias
 
         secuencias.asegurar_secuencias()
-        configuracion.asegurar_valores()
+        configuracion.asegurar_valores(app.config["DEMO"])
         auditoria.sellar_pendientes()
     return app
 
@@ -189,7 +195,7 @@ def _registrar_blueprints(app: Flask) -> None:
     @app.get("/salud")
     @publica
     def salud():
-        return jsonify({"ok": True, "app": NOMBRE, "version": VERSION})
+        return jsonify({"ok": True, "app": NOMBRE})  # H-20: sin versión
 
 
 def _vigilar_sesion(app: Flask):

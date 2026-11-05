@@ -226,6 +226,18 @@ def agregar(
         acompanamiento=acompanamiento.descripcion if acompanamiento else None,
     )
     db.session.add(linea)
+    # H-13: lo pendiente de enviar en TODA la mesa más esta línea debe alcanzar.
+    from . import inventario
+
+    inventario.revisar_existencia(
+        [
+            ln
+            for c in cuenta.comanda.cuentas
+            for ln in c.lineas
+            if ln is not linea and ln.estado == "PED"
+        ]
+        + [linea]  # aún sin guardar: su estado «PED» se asigna al insertarla
+    )
     _reabrir_si_precuenta(cuenta)
     return linea
 
@@ -325,6 +337,9 @@ def enviar(comanda: Comanda, operador: Operador | None = None) -> int:
                 linea.enviado_en = momento
                 enviadas.append(linea)
     if enviadas:
+        inventario.revisar_existencia(
+            enviadas
+        )  # H-13: otra mesa pudo gastarlo mientras tanto
         db.session.flush()
         inventario.consumir(enviadas, operador or comanda.mesero)
         impresion.encolar_comandas(comanda, enviadas)

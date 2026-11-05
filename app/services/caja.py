@@ -32,7 +32,7 @@ from ..models import (
     Turno,
     ahora,
 )
-from . import secuencias
+from . import configuracion, secuencias
 from .auditoria import auditar
 from .calculos import (
     LineaCalculo,
@@ -122,9 +122,38 @@ def resumen(turno: Turno) -> dict:
     }
 
 
-def cerrar_turno(turno: Turno, cajero: Operador, contado, justificacion: str) -> Turno:
+def pendientes_de_cierre() -> list:
+    """H-10: lo que queda abierto al cerrar el turno (mesas con consumo y documentos sin autorizar)."""
+    from ..models import Comanda
+    from . import fiscal
+
+    avisos = []
+    for c in Comanda.query.filter_by(estado="abierta").order_by(Comanda.numero).all():
+        if any(cu.activas for cu in c.cuentas if cu.estado != "pagada"):
+            lugar = f"mesa {c.mesa.numero}" if c.mesa else f"pedido directo {c.numero}"
+            avisos.append(f"{lugar} sin cobrar ({c.mesero.nombre})")
+    pend = fiscal.pendientes() + fiscal.rechazados()
+    if pend:
+        avisos.append(f"{len(pend)} documento(s) sin autorizar por el PAC")
+    return avisos
+
+
+def cerrar_turno(
+    turno: Turno,
+    cajero: Operador,
+    contado,
+    justificacion: str,
+    autorizador: Operador | None = None,
+) -> Turno:
     if turno.cerrado_en is not None:
         raise ReglaNegocioError("Ese turno ya está cerrado.")
+    abiertos = pendientes_de_cierre()
+    if abiertos and (autorizador is None or not autorizador.puede("supervisor")):
+        raise ReglaNegocioError(
+            "No se cierra el turno con pendientes: "
+            + "; ".join(abiertos)
+            + ". Resuélvelos (cobra las mesas, reenvía los documentos) o pide a un supervisor que autorice el cierre."
+        )
     contado = validar_precio(contado or "0", "efectivo contado", permitir_cero=True)
     esperado = resumen(turno)["efectivo_esperado"]
     diferencia = contado - esperado
@@ -142,7 +171,9 @@ def cerrar_turno(turno: Turno, cajero: Operador, contado, justificacion: str) ->
     auditar(
         "turno_cerrado",
         f"turno {turno.numero}: esperado {esperado}, contado {contado}, "
-        f"diferencia {diferencia}",
+        f"diferencia {diferencia}"
+        + (f"; con pendientes: {'; '.join(abiertos)}" if abiertos else ""),
+        autorizador=autorizador if abiertos else None,
     )
     return turno
 
@@ -254,6 +285,16 @@ def cobrar(cuenta: Cuenta, datos, cajero: Operador) -> Documento:
     turno = turno_abierto()
     if turno is None:
         raise ReglaNegocioError("No hay un turno de caja abierto. Ábrelo en Caja.")
+    from flask import current_app
+
+    if not current_app.config["DEMO"]:
+        faltan = configuracion.emisor_incompleto()
+        if faltan:
+            raise ReglaNegocioError(
+                "No se puede facturar: faltan datos del emisor ("
+                + ", ".join(faltan)
+                + "). Complétalos en Administración → Configuración."
+            )
     if cuenta.estado == "pagada":
         raise ReglaNegocioError("Esa cuenta ya está pagada.")
     if cuenta.comanda.estado != "abierta":
