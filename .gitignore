@@ -8,3 +8,4 @@ build/
 dist/
 datos/
 *.log
+SHA256SUMS.txt
