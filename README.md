@@ -116,3 +116,4 @@ build.bat            construcción completa con pruebas y análisis de seguridad
 tests/               224 pruebas automáticas
 docs/                MANUAL, FISCAL, SEGURIDAD, CAMBIOS, SUPOSICIONES, PENDIENTES, PRIMEROS_PASOS, capturas y PDF
 ```
+"# ComandaPOS" 
