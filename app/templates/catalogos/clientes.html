@@ -2,7 +2,7 @@
 contenido %}
 <div class="encabezado-pagina">
   <h1>Clientes</h1>
-  <a class="btn btn-gris" href="{{ url_for('mesas.control') }}">← Mesas</a>
+  <a class="btn btn-gris" href="{{ url_for('mesas.control') }}">{{ icono('volver') }} Mesas</a>
 </div>
 <div class="tarjetas">
   <section class="tarjeta tarjeta-ancha">
@@ -60,7 +60,7 @@ contenido %}
   </section>
 
   <section class="tarjeta tarjeta-ancha">
-    <h2>Crear cliente contribuyente</h2>
+    <h2>{{ icono('cliente') }} Crear cliente contribuyente</h2>
     <p class="vacio">
       El consumidor final no se registra: se escribe su nombre al cobrar.
     </p>

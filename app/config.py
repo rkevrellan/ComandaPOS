@@ -13,7 +13,7 @@ from __future__ import annotations
 import os
 
 NOMBRE = "ComandaPOS"
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 LEMA = "Del pedido a la factura, sin perder una comanda."
 
 #: Niveles de seguridad del sistema de referencia, de menor a mayor.

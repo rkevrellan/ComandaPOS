@@ -1,10 +1,15 @@
 {% extends "base.html" %} {% block titulo %}Administración{% endblock %} {%
-block contenido %}
+block contenido %} {% set pro = SUSCRIPCION.pro if SUSCRIPCION else true %}
 <div class="encabezado-pagina">
-  <h1>Administración de archivos</h1>
-  <a class="btn btn-gris" href="{{ url_for('mesas.control') }}">← Mesas</a>
+  <h1>
+    <span class="sobretitulo-pagina">Panel del negocio</span>Administración de
+    archivos
+  </h1>
+  <a class="btn btn-gris" href="{{ url_for('mesas.control') }}"
+    >{{ icono('volver') }} Mesas</a
+  >
 </div>
-{% if insumos_bajos %}
+{% if insumos_bajos and pro %}
 <p class="aviso aviso-error">
   Existencia baja: {% for i in insumos_bajos %}{{ i.nombre }} ({{
   i.existencia.normalize() }} {{ i.unidad }}){{ ', ' if not loop.last else ''
@@ -22,34 +27,62 @@ block contenido %}
 <p class="aviso aviso-error">
   Quedan {{ folios.disponibles }} folios fiscales.
 </p>
-{% endif %}
+{% endif %} {% set iconos = {'productos': 'plato', 'secciones': 'seccion',
+'acompanamientos': 'acompanamiento', 'areas': 'area', 'salas': 'sala', 'mesas':
+'mesas', 'clientes': 'cliente', 'impresoras': 'imprimir', 'insumos':
+'inventario'} %}
 
 <div class="mosaico">
   {% for clave in ['productos', 'secciones', 'acompanamientos', 'areas',
   'salas', 'mesas', 'clientes', 'impresoras', 'insumos'] %} {% set c =
-  catalogos[clave] %}
-  <a class="mosaico-item" href="{{ url_for('admin.catalogo', clave=clave) }}"
-    ><b>{{ c.titulo }}</b><small>{{ c.ayuda or 'Crear y editar' }}</small></a
+  catalogos[clave] %} {% set bloqueado = clave == 'insumos' and not pro %}
+  <a
+    class="mosaico-item {{ 'bloqueado' if bloqueado else '' }}"
+    href="{{ url_for('admin.catalogo', clave=clave) }}"
+    >{{ icono(iconos[clave]) }}<b>{{ c.titulo }}</b
+    ><small>{{ c.ayuda or 'Crear y editar' }}</small>{% if bloqueado %}<span
+      class="insignia insignia-pro"
+      >{{ icono('candado') }} Pro</span
+    >{% endif %}</a
   >
   {% endfor %}
   <a class="mosaico-item" href="{{ url_for('catalogos.notas') }}"
-    ><b>Notas fijas</b><small>Notas predefinidas de la comanda</small></a
+    >{{ icono('nota') }}<b>Notas fijas</b
+    ><small>Notas predefinidas de la comanda</small></a
   >
-  <a class="mosaico-item" href="{{ url_for('admin.inventario_lista') }}"
-    ><b>Inventario</b><small>Existencias, entradas y ajustes</small></a
+  <a
+    class="mosaico-item {{ '' if pro else 'bloqueado' }}"
+    href="{{ url_for('admin.inventario_lista') }}"
+    >{{ icono('inventario') }}<b>Inventario</b
+    ><small>Existencias, entradas y ajustes</small>{% if not pro %}<span
+      class="insignia insignia-pro"
+      >{{ icono('candado') }} Pro</span
+    >{% endif %}</a
   >
   <a class="mosaico-item" href="{{ url_for('admin.operadores') }}"
-    ><b>Operadores</b><small>Usuarios, niveles y claves</small></a
+    >{{ icono('grupo') }}<b>Operadores</b
+    ><small>Usuarios, niveles y claves</small></a
   >
   <a class="mosaico-item" href="{{ url_for('admin.config') }}"
-    ><b>Configuración</b
+    >{{ icono('config') }}<b>Configuración</b
     ><small>Emisor, descuentos, PAC, impresión, red</small></a
   >
   <a class="mosaico-item" href="{{ url_for('admin.impresiones') }}"
-    ><b>Impresiones</b><small>Cola y página de prueba</small></a
+    >{{ icono('imprimir') }}<b>Impresiones</b
+    ><small>Cola y página de prueba</small></a
   >
-  <a class="mosaico-item destacado" href="{{ url_for('reportes.inicio') }}"
-    ><b>Reportes</b><small>Ventas, ITBMS, jubilados, anulaciones</small></a
+  <a
+    class="mosaico-item destacado {{ '' if pro else 'bloqueado' }}"
+    href="{{ url_for('reportes.inicio') }}"
+    >{{ icono('reportes') }}<b>Reportes</b
+    ><small>Ventas, ITBMS, jubilados, anulaciones</small>{% if not pro %}<span
+      class="insignia insignia-pro"
+      >{{ icono('candado') }} Pro</span
+    >{% endif %}</a
+  >
+  <a class="mosaico-item" href="{{ url_for('suscripcion.inicio') }}"
+    >{{ icono('corona') }}<b>Suscripción</b
+    ><small>Plan, vencimiento y activación del pago mensual</small></a
   >
 </div>
 {% endblock %}

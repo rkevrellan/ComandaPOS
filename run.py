@@ -207,6 +207,11 @@ def main(argv: list | None = None) -> int:
         help="comprueba que estén todas las dependencias y termina",
     )
     p.add_argument(
+        "--verificar-llave",
+        action="store_true",
+        help="falla si la llave de suscripción es la de pruebas (lo usa build.bat)",
+    )
+    p.add_argument(
         "--modo",
         choices=("produccion", "demostracion"),
         help="guarda el modo de este equipo en la carpeta de datos y termina",
@@ -236,6 +241,8 @@ def main(argv: list | None = None) -> int:
         return 0
     if args.verificar:
         return verificar()
+    if args.verificar_llave:
+        return verificar_llave()
     if args.confiar:
         return confiar()
     if args.red:  # a propósito: la lista «Terminales permitidas» filtra quién entra
@@ -325,6 +332,20 @@ def confiar() -> int:
         [certutil, "-user", "-addstore", "Root", ca], check=False
     )
     return resultado.returncode
+
+
+def verificar_llave() -> int:
+    """El instalador debe aceptar SOLO los códigos del proveedor (no los de las pruebas)."""
+    from app.services import llave_proveedor
+
+    if llave_proveedor.ES_DE_DESARROLLO:
+        print(
+            "   La llave de suscripción es la de PRUEBAS: cualquiera podría emitir códigos.\n"
+            "   Créala una vez con:  python proveedor\\emitir_codigo.py crear-llave"
+        )
+        return 1
+    print("   Llave de suscripción del proveedor: OK.")
+    return 0
 
 
 def verificar() -> int:

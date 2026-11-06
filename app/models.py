@@ -700,3 +700,23 @@ class Abono(db.Model):
     turno = db.relationship("Turno")
 
     __table_args__ = (db.CheckConstraint("monto > 0", name="ck_abono_monto"),)
+
+
+# --------------------------------------------------------------------------- suscripción (1.2)
+class PagoSuscripcion(db.Model):
+    """Un código mensual activado: plan y fecha hasta la que cubre (firmado por el proveedor)."""
+
+    __tablename__ = "suscripcion_pagos"
+    id = db.Column(db.Integer, primary_key=True)
+    serie = db.Column(db.Integer, unique=True, nullable=False)
+    plan = db.Column(db.String(10), nullable=False)
+    hasta = db.Column(db.Date, nullable=False)
+    codigo = db.Column(db.String(200), nullable=False)
+    activado = db.Column(db.DateTime, nullable=False, default=ahora)
+    operador_id = db.Column(db.Integer, db.ForeignKey("operadores.id"))
+
+    operador = db.relationship("Operador")
+
+    __table_args__ = (
+        db.CheckConstraint("plan IN ('basico', 'pro')", name="ck_suscripcion_plan"),
+    )

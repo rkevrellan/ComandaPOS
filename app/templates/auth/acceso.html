@@ -6,6 +6,26 @@ endblock %} {% block contenido %}
   %}
 </div>
 
+<aside class="acceso-hero" aria-hidden="true">
+  <span class="sobretitulo"
+    >{{ icono('fuego') }} Punto de venta para restaurantes</span
+  >
+  <h2>Del salón a la factura,<br /><em>sin perder una comanda.</em></h2>
+  <p>
+    Mesas, cocina, caja y factura electrónica DGI en una sola pantalla táctil,
+    aunque se vaya el internet.
+  </p>
+  <ul class="acceso-puntos">
+    <li>
+      {{ icono('mesas') }} Mapa de mesas en vivo, con lo que lleva cada una
+    </li>
+    <li>{{ icono('cocina') }} Las comandas llegan solas a cocina</li>
+    <li>
+      {{ icono('documento') }} Factura electrónica y cierre de caja en un toque
+    </li>
+  </ul>
+</aside>
+
 <section class="tarjeta-acceso" aria-labelledby="titulo-acceso">
   <div class="acceso-marca">
     <img
@@ -15,7 +35,7 @@ endblock %} {% block contenido %}
       height="72"
     />
     <div>
-      <p class="acceso-nombre">{{ NOMBRE }}</p>
+      <p class="acceso-nombre">Comanda<em>POS</em></p>
       <p class="acceso-version">Versión <b>{{ VERSION }}</b></p>
     </div>
   </div>

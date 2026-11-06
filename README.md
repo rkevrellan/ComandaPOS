@@ -6,7 +6,8 @@ factura electrónica (CAFE) → cierre de turno**. Monolito en Python/Flask que 
 programa de escritorio (`ComandaPOS.exe` + instalador) y atiende terminales y pantallas de cocina en la red local.
 
 Programación: **Kevin Rellán** · Especificación: [`docs/PROMPT_ComandaPOS.md`](docs/PROMPT_ComandaPOS.md) ·
-Manual de uso: [`docs/MANUAL.md`](docs/MANUAL.md) · Novedades de la 1.1: [`docs/CAMBIOS.md`](docs/CAMBIOS.md)
+Manual de uso: [`docs/MANUAL.md`](docs/MANUAL.md) · Novedades de la 1.2: [`docs/CAMBIOS.md`](docs/CAMBIOS.md) ·
+Suscripción mensual: [`docs/SUSCRIPCION.md`](docs/SUSCRIPCION.md)
 (corrige los 24 hallazgos del diagnóstico de la 1.0)
 
 ## Qué hace
@@ -21,8 +22,11 @@ Manual de uso: [`docs/MANUAL.md`](docs/MANUAL.md) · Novedades de la 1.1: [`docs
 | **Reportes** | Ventas, comprobantes, ticket promedio, notas de crédito, neto, ITBMS por tasa (para la declaración), mapa de calor día/hora, formas de pago, meseros, secciones, productos, tiempos de cocina, jubilados y anulaciones. Todo exportable a **CSV** (Excel en español). |
 | **Seguridad** | 5 niveles de acceso, PIN/contraseñas con scrypt, **verificación en dos pasos** (obligatoria para administración fuera de la demo), auditoría encadenada con HMAC, CSRF, CSP estricta, **HTTPS en la red local** con certificado propio, lista de terminales permitidas, carpeta de datos solo para el grupo «ComandaPOS». Ver [`docs/SEGURIDAD.md`](docs/SEGURIDAD.md). |
 
+| **Suscripción** | Mensual, planes **Básico** (punto de venta en una PC) y **Pro** (más cocina, reportes, inventario, crédito y red). Códigos firmados por el proveedor (Ed25519), prueba de 14 días, gracia de 7 y **modo limitado** que nunca impide facturar lo ya consumido. Ver [`docs/SUSCRIPCION.md`](docs/SUSCRIPCION.md). |
+| **Diseño** | Tema oscuro «Brasa» para pantallas táctiles: tipografía Inter incluida, íconos e ilustraciones propios, estados con color y brillo, todo sin internet. Pantalla propia si el servidor se apaga. |
+
 ## Instalar en Windows (usuario final)
-1. Ejecuta `ComandaPOS-1.1.0-instalador.exe` (lo genera `build.bat`, ver abajo). El instalador pregunta
+1. Ejecuta `ComandaPOS-1.2.0-instalador.exe` (lo genera `build.bat`, ver abajo). El instalador pregunta
    **Producción** o **Demostración**.
 2. Abre **ComandaPOS**. En producción, la primera vez pide crear el **primer administrador** (solo desde esa
    PC) y luego activar su verificación en dos pasos. Los datos viven en `C:\ProgramData\ComandaPOS`, que solo
@@ -43,11 +47,13 @@ Manual de uso: [`docs/MANUAL.md`](docs/MANUAL.md) · Novedades de la 1.1: [`docs
 
 ## Construir el .exe y el instalador (en tu PC con Windows)
 Requisitos: **Python 3.12+** (python.org, «Add python.exe to PATH») e **Inno Setup 6** (jrsoftware.org).
+Antes de la primera compilación crea tu llave de suscripción (una sola vez):
+`python proveedor\emitir_codigo.py crear-llave` (ver [`docs/SUSCRIPCION.md`](docs/SUSCRIPCION.md)).
 ```bat
 build.bat
 ```
 Hace todo y se detiene si algo falla: entorno limpio → dependencias → **pruebas** → **pip-audit** →
-**bandit** → PyInstaller (`dist\ComandaPOS\ComandaPOS.exe`) → `--verificar` → Inno Setup (`dist\ComandaPOS-1.1.0-instalador.exe`)
+**bandit** → llave de suscripción del proveedor → PyInstaller (`dist\ComandaPOS\ComandaPOS.exe`) → `--verificar` → Inno Setup (`dist\ComandaPOS-1.2.0-instalador.exe`)
 → `dist\SHA256SUMS.txt`. Sin Inno Setup queda la versión portable en `dist\ComandaPOS\`.
 Recomendado antes de distribuir: firmar los `.exe` con un certificado de firma de código (`signtool`).
 
@@ -107,13 +113,14 @@ app/
   seguridad.py       @publica / @rol_requerido, limitadores, PIN y contraseñas
   services/          calculos (RN-01..06) · secuencias · pedidos · caja · fiscal (PAC) · impresion (ESC/POS)
                      inventario · reportes · dos_pasos (TOTP) · tls (HTTPS) · secretos · pdf · auditoria · configuracion
-  auth/ mesas/ salon/ cocina/ caja/ catalogos/ admin/ reportes/ cuenta/ dev/     pantallas
-  templates/ static/ interfaz táctil (sin JavaScript en línea)
+                     suscripcion (planes, códigos firmados, modo limitado) · llave_proveedor
+  auth/ mesas/ salon/ cocina/ caja/ catalogos/ admin/ reportes/ cuenta/ suscripcion/ dev/   pantallas
+  templates/ static/ interfaz táctil «Brasa» (sin JavaScript en línea; fuente Inter e íconos propios)
 escritorio.py        ComandaPOS.exe: ventana propia, una sola instancia, modo terminal y cocina
 run.py               ComandaPOS-servidor.exe: servidor local o de red, cambio de credenciales
 comandapos.spec      PyInstaller        instalador/  Inno Setup, icono, versión de Windows
 build.bat            construcción completa con pruebas y análisis de seguridad
-tests/               224 pruebas automáticas
-docs/                MANUAL, FISCAL, SEGURIDAD, CAMBIOS, SUPOSICIONES, PENDIENTES, PRIMEROS_PASOS, capturas y PDF
+proveedor/           emitir_codigo.py: llave del proveedor y códigos mensuales (se usa en TU PC)
+tests/               250 pruebas automáticas
+docs/                MANUAL, FISCAL, SEGURIDAD, CAMBIOS, SUSCRIPCION, SUPOSICIONES, PENDIENTES, PRIMEROS_PASOS, capturas y PDF
 ```
-"# ComandaPOS" 

@@ -178,6 +178,7 @@ def _registrar_blueprints(app: Flask) -> None:
     from .admin.routes import bp as admin_bp
     from .cuenta.routes import bp as cuenta_bp
     from .reportes.routes import bp as reportes_bp
+    from .suscripcion.routes import bp as suscripcion_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(mesas_bp)
@@ -188,6 +189,7 @@ def _registrar_blueprints(app: Flask) -> None:
     app.register_blueprint(admin_bp)
     app.register_blueprint(cuenta_bp)
     app.register_blueprint(reportes_bp)
+    app.register_blueprint(suscripcion_bp)
     app.register_blueprint(dev_bp, url_prefix="/dev")
 
     from .seguridad import publica
@@ -196,6 +198,29 @@ def _registrar_blueprints(app: Flask) -> None:
     @publica
     def salud():
         return jsonify({"ok": True, "app": NOMBRE})  # H-20: sin versión
+
+    @app.get("/sw.js")
+    @publica
+    def service_worker():
+        """Service worker en la raíz (alcance «/»): pantalla propia cuando el servidor no responde.
+
+        Reemplaza a cualquier otro service worker que el navegador tenga guardado para esta
+        misma dirección y puerto (p. ej., otra app de prueba que usó 127.0.0.1:5000).
+        """
+        resp = app.send_static_file("js/sw.js")
+        resp.headers["Content-Type"] = "application/javascript; charset=utf-8"
+        resp.headers["Service-Worker-Allowed"] = (
+            "/"  # (Cache-Control: no-store, en despues())
+        )
+        return resp
+
+    @app.get("/sin-servidor")
+    @publica
+    def sin_servidor():
+        """La copia que guarda el service worker (se pide sin cookies: no lleva datos de sesión)."""
+        return render_template(
+            "sin_servidor.html", envio=request.args.get("envio") == "1"
+        )
 
 
 def _vigilar_sesion(app: Flask):
@@ -261,6 +286,9 @@ _PERMITIDO_SIN_2FA = {
     "auth.salir",
     "static",
     "salud",
+    "service_worker",
+    "sin_servidor",
+    "suscripcion.plan_pro",
 }
 
 
@@ -280,6 +308,31 @@ def _exigir_2fa(app: Flask):
     return None
 
 
+def _exigir_plan():
+    """Plan Básico: las pantallas Pro y las terminales en red llevan a la explicación del plan."""
+    import ipaddress
+
+    from .services import suscripcion
+
+    if request.endpoint in suscripcion.ENDPOINTS_SIN_RED or request.endpoint == (
+        "suscripcion.plan_pro"
+    ):
+        return None
+    try:
+        local = ipaddress.ip_address(
+            (request.remote_addr or "").split("%")[0]
+        ).is_loopback
+    except ValueError:
+        local = False
+    if not local and not suscripcion.tiene("red"):
+        return redirect(url_for("suscripcion.plan_pro", funcion="red"))
+    if current_user.is_authenticated:
+        funcion = suscripcion.funcion_de(request.endpoint, request.view_args)
+        if funcion and not suscripcion.tiene(funcion):
+            return redirect(url_for("suscripcion.plan_pro", funcion=funcion))
+    return None
+
+
 def _peticiones(app: Flask) -> None:
     @app.before_request
     def antes():
@@ -295,6 +348,9 @@ def _peticiones(app: Flask) -> None:
         if respuesta is not None:
             return respuesta
         respuesta = _exigir_2fa(app)
+        if respuesta is not None:
+            return respuesta
+        respuesta = _exigir_plan()
         if respuesta is not None:
             return respuesta
         if request.method in METODOS_CON_EFECTO and app.config.get("CSRF_ENABLED"):
@@ -427,8 +483,29 @@ def _errores(app: Flask) -> None:
         )
 
 
+#: Íconos que existen en static/img/iconos.svg (un nombre mal escrito falla en las pruebas).
+def _iconos_disponibles(app: Flask) -> frozenset:
+    import re
+
+    ruta = os.path.join(app.static_folder, "img", "iconos.svg")
+    with open(ruta, encoding="utf-8") as f:
+        return frozenset(re.findall(r'<symbol id="([a-z0-9-]+)"', f.read()))
+
+
 def _plantillas(app: Flask) -> None:
+    iconos = _iconos_disponibles(app)
+
+    def icono(nombre: str, clase: str = "") -> Markup:
+        """<svg> con un ícono del set propio (decorativo: el texto del botón dice qué hace)."""
+        if nombre not in iconos:
+            raise ValueError(f"Ícono desconocido: {nombre}")
+        return Markup(
+            '<svg class="i {}" aria-hidden="true" focusable="false">'
+            '<use href="/static/img/iconos.svg#{}"></use></svg>'
+        ).format(clase, nombre)
+
     app.jinja_env.globals.update(
+        icono=icono,
         NOMBRE=NOMBRE,
         VERSION=VERSION,
         LEMA=LEMA,
@@ -436,12 +513,14 @@ def _plantillas(app: Flask) -> None:
         csrf_token=_csrf_token,
         csrf_field=lambda: Markup(
             '<input type="hidden" name="csrf_token" value="{}">'
-        ).format(_csrf_token()),  # Markup.format escapa el valor
+        ).format(
+            _csrf_token()
+        ),  # Markup.format escapa el valor
         formas_pago_nombre=_nombre_forma,
         # RN-05: clave de idempotencia por formulario (un doble toque no repite la acción).
-        idem_field=lambda: Markup('<input type="hidden" name="idem" value="{}">').format(
-            secrets.token_hex(16)
-        ),
+        idem_field=lambda: Markup(
+            '<input type="hidden" name="idem" value="{}">'
+        ).format(secrets.token_hex(16)),
     )
 
     @app.context_processor
@@ -453,7 +532,17 @@ def _plantillas(app: Flask) -> None:
             from .services.caja import turno_abierto
 
             turno = turno_abierto()
-        return {"DEMO": app.config["DEMO"], "INACTIVIDAD": inactividad, "TURNO": turno}
+        susc = None
+        if current_user.is_authenticated:
+            from .services import suscripcion
+
+            susc = suscripcion.estado()
+        return {
+            "DEMO": app.config["DEMO"],
+            "INACTIVIDAD": inactividad,
+            "TURNO": turno,
+            "SUSCRIPCION": susc,
+        }
 
     @app.template_filter("dinero")
     def dinero(valor):

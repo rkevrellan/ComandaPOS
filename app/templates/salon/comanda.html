@@ -190,14 +190,14 @@ cuenta.estado == 'pagada' %}
     </form>
   </div>
   <a class="btn accion" href="{{ url_for('salon.notas', lid=seleccion.id) }}"
-    >Notas</a
+    >{{ icono('nota') }} Notas</a
   >
   <form
     method="post"
     action="{{ url_for('salon.linea_accion', lid=seleccion.id, accion='llevar') }}"
   >
     {{ csrf_field() }}<button class="btn accion" type="submit">
-      {{ 'Quitar llevar' if seleccion.para_llevar else 'Para llevar' }}
+      {{ icono('bolsa') }} {{ 'Quitar llevar' if seleccion.para_llevar else 'Para llevar' }}
     </button>
   </form>
   <form
@@ -205,7 +205,7 @@ cuenta.estado == 'pagada' %}
     action="{{ url_for('salon.linea_accion', lid=seleccion.id, accion='borrar') }}"
   >
     {{ csrf_field() }}<button class="btn accion peligro" type="submit">
-      Borrar
+      {{ icono('borrar') }} Borrar
     </button>
   </form>
   {% elif seleccion.estado != 'ANU' %}
@@ -229,7 +229,7 @@ cuenta.estado == 'pagada' %}
   <a
     class="btn accion"
     href="{{ url_for('salon.descuento', lid=seleccion.id) }}"
-    >Descuento %</a
+    >{{ icono('porcentaje') }} Descuento %</a
   >
   <form
     method="post"
@@ -297,40 +297,40 @@ cuenta.estado == 'pagada' %}
   <a
     class="btn"
     href="{{ url_for('mesas.control', sala=comanda.mesa.sala_id if comanda.mesa else None) }}"
-    >← Mesas</a
+    >{{ icono('volver') }} Mesas</a
   >
   {% if not cerrada %}
   <form method="post" action="{{ url_for('salon.enviar', cid=comanda.id) }}">
     {{ csrf_field() }}{{ idem_field() }}
     <input type="hidden" name="cuenta" value="{{ cuenta.numero }}" />
     <button class="btn btn-enviar" type="submit">
-      Enviar pedidos{{ ' (' ~ pendientes ~ ')' if pendientes else '' }}
+      {{ icono('enviar') }} Enviar pedidos{{ ' (' ~ pendientes ~ ')' if pendientes else '' }}
     </button>
   </form>
   {% if not pagada %}
   <a class="btn" href="{{ url_for('salon.jubilado', cuenta_id=cuenta.id) }}"
-    >Jubilado %{{ ' ✔' if cuenta.jubilado_cedula else '' }}</a
+    >{{ icono('jubilado') }} Jubilado %{{ ' ✔' if cuenta.jubilado_cedula else '' }}</a
   >
   <form
     method="post"
     action="{{ url_for('salon.precuenta', cuenta_id=cuenta.id) }}"
   >
     {{ csrf_field() }}
-    <button class="btn" type="submit">Pre-cuenta</button>
+    <button class="btn" type="submit">{{ icono('imprimir') }} Pre-cuenta</button>
   </form>
   {% if es_cajero %}
   <a
     class="btn btn-cobrar"
     href="{{ url_for('salon.cobrar', cuenta_id=cuenta.id) }}"
-    >Cobrar cta. {{ cuenta.numero }}</a
+    >{{ icono('billete') }} Cobrar cta. {{ cuenta.numero }}</a
   >
   {% endif %} {% endif %} {% if comanda.mesa %}
   <a class="btn" href="{{ url_for('salon.mover', cid=comanda.id) }}"
-    >Mover mesa</a
+    >{{ icono('mover') }} Mover mesa</a
   >
   {% endif %}
   <a class="btn" href="{{ url_for('salon.otro_mesero', cid=comanda.id) }}"
-    >Otro mesero</a
+    >{{ icono('usuario') }} Otro mesero</a
   >
   {% endif %} {% if cerrada or pagada %}
   <a

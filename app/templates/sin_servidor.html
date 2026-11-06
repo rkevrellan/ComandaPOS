@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sin servidor · {{ NOMBRE }}</title>
+    <link rel="icon" href="/static/img/logo.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/static/css/comanda.css" />
+  </head>
+  <body class="pantalla-sin-servidor">
+    {# Esta pantalla la guarda el service worker y se muestra cuando el servidor
+    no responde: no lleva datos de la sesión ni enlaces que dependan del
+    servidor. Rutas fijas a /static para que funcione desde la copia guardada.
+    #}
+    <main
+      class="sin-servidor"
+      data-sin-servidor
+      {%
+      if
+      envio
+      %}data-envio{%
+      endif
+      %}
+    >
+      <svg
+        class="ilus-sin-servidor"
+        viewBox="0 0 220 150"
+        role="img"
+        aria-label="Comanda desconectada del servidor"
+      >
+        <ellipse cx="110" cy="138" rx="78" ry="6" fill="#000" opacity=".28" />
+        <!-- comanda (la hoja del logo) -->
+        <path
+          d="M74 20h52l16 16v86a5 5 0 0 1-5 5H74a5 5 0 0 1-5-5V25a5 5 0 0 1 5-5z"
+          fill="#fff"
+        />
+        <path d="M126 20v16h16" fill="#fed7aa" />
+        <rect x="80" y="44" width="38" height="6" rx="3" fill="#9a3412" />
+        <rect x="80" y="58" width="48" height="6" rx="3" fill="#fdba74" />
+        <rect x="80" y="72" width="30" height="6" rx="3" fill="#fdba74" />
+        <rect x="80" y="86" width="42" height="6" rx="3" fill="#fdba74" />
+        <!-- cable que sale de la comanda, con el enchufe suelto -->
+        <path
+          d="M110 127c0 10-14 12-30 10s-34-4-46 2"
+          fill="none"
+          stroke="#9aa8c1"
+          stroke-width="4"
+          stroke-linecap="round"
+        />
+        <rect x="16" y="132" width="20" height="14" rx="3" fill="#9aa8c1" />
+        <rect x="9" y="135" width="8" height="2.6" rx="1.3" fill="#9aa8c1" />
+        <rect x="9" y="141" width="8" height="2.6" rx="1.3" fill="#9aa8c1" />
+        <!-- aviso: sin conexión -->
+        <circle cx="152" cy="104" r="18" fill="#dc2626" />
+        <path
+          d="M144 96l16 16M160 96l-16 16"
+          stroke="#fff"
+          stroke-width="4"
+          stroke-linecap="round"
+        />
+        <!-- chispas del enchufe -->
+        <path
+          class="chispa"
+          d="M4 124l5 4M10 118l2 6M20 120l-1 6"
+          stroke="#f97316"
+          stroke-width="2.4"
+          stroke-linecap="round"
+        />
+      </svg>
+
+      <img
+        class="marca-sin-servidor"
+        src="/static/img/logo.svg"
+        alt=""
+        width="28"
+        height="28"
+      />
+      <h1>El servidor de {{ NOMBRE }} no responde</h1>
+      {% if envio %}
+      <p class="sin-servidor-alerta">
+        La última acción pudo <b>no haberse guardado</b>. Cuando vuelva la
+        conexión, revisa la mesa o la cuenta antes de repetirla.
+      </p>
+      {% endif %}
+      <p>
+        Revisa que la PC de caja esté encendida y con {{ NOMBRE }} abierto, y
+        que esta terminal siga conectada a la red del local.
+      </p>
+      <p class="sin-servidor-estado" data-estado role="status">
+        Buscando el servidor…
+      </p>
+      <button class="btn btn-aceptar" type="button" data-reintentar>
+        Reintentar ahora
+      </button>
+      <p class="sin-servidor-nota">
+        Esta pantalla vuelve sola en cuanto el servidor responda.
+      </p>
+    </main>
+    <script src="/static/js/sin-servidor.js" defer></script>
+  </body>
+</html>

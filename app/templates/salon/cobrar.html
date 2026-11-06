@@ -127,10 +127,15 @@ clase_main %}pantalla-cobro{% endblock %} {% block contenido %}
     autocomplete="off"
     data-total="{{ t.total }}"
   >
-    {{ csrf_field() }}{{ idem_field() }} {% for clave, nombre in formas.items()
-    %}
+    {{ csrf_field() }}{{ idem_field() }} {% set iconos_pago = {'efectivo':
+    'billete', 'visa': 'tarjeta', 'mastercard': 'tarjeta', 'clave': 'tarjeta',
+    'yappy': 'telefono', 'credito': 'credito'} %} {% for clave, nombre in
+    formas.items() if not (clave == 'credito' and SUSCRIPCION and not
+    SUSCRIPCION.pro) %}
     <div class="pago-fila">
-      <label for="pago-{{ clave }}">{{ nombre }}</label>
+      <label for="pago-{{ clave }}"
+        >{{ icono(iconos_pago.get(clave, 'billete')) }} {{ nombre }}</label
+      >
       <input
         id="pago-{{ clave }}"
         name="{{ clave }}"

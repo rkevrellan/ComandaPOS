@@ -1,7 +1,7 @@
 {% extends "base.html" %} {% block titulo %}Ocupación de mesas{% endblock %} {%
 block clase_main %}control{% endblock %} {% block contenido %}
 <aside class="panel-izq">
-  <h2 class="panel-titulo">Salas de venta</h2>
+  <h2 class="panel-titulo">{{ icono("sala") }} Salas de venta</h2>
   <nav class="lista-salas">
     {% for s in salas %}
     <a
@@ -27,11 +27,11 @@ block clase_main %}control{% endblock %} {% block contenido %}
     </div>
   </dl>
   {% if rapidas %}
-  <h2 class="panel-titulo">Pedidos directos abiertos</h2>
+  <h2 class="panel-titulo">{{ icono("rayo") }} Pedidos directos abiertos</h2>
   <div class="lista-salas">
     {% for c in rapidas %}
     <a class="btn btn-rayo" href="{{ url_for('salon.comanda', cid=c.id) }}"
-      >Comanda {{ c.numero }}</a
+      >{{ icono("rayo") }} Comanda {{ c.numero }}</a
     >
     {% endfor %}
   </div>
@@ -40,7 +40,7 @@ block clase_main %}control{% endblock %} {% block contenido %}
 
 <section class="zona-mesas" aria-labelledby="titulo-mesas">
   <h1 id="titulo-mesas" class="titulo-seccion">
-    Control · ocupación de mesas <span>{{ sala.nombre if sala else '' }}</span>
+    <small>Control · ocupación de mesas</small> {{ sala.nombre if sala else 'Salón' }}
   </h1>
   {% if mesas %}
   <ul class="cuadricula-mesas">
@@ -70,12 +70,16 @@ block clase_main %}control{% endblock %} {% block contenido %}
     {% endfor %}
   </ul>
   {% else %}
-  <p class="vacio">Esta sala todavía no tiene mesas.</p>
+  <div class="vacio-ilustrado">
+    {{ icono('mesas', 'i-xl') }}
+    <b>Esta sala todavía no tiene mesas</b>
+    <span>Agrégalas en Administración → Configurar mesas.</span>
+  </div>
   {% endif %}
 </section>
 
 <aside class="panel-der">
-  <h2 class="panel-titulo">Estados</h2>
+  <h2 class="panel-titulo">{{ icono("punto") }} Estados</h2>
   <ul class="leyenda">
     {% for clave, texto in leyenda.items() %}
     <li>
@@ -84,7 +88,7 @@ block clase_main %}control{% endblock %} {% block contenido %}
     </li>
     {% endfor %}
   </ul>
-  <h2 class="panel-titulo">Pedidos listos</h2>
+  <h2 class="panel-titulo">{{ icono("cocina") }} Pedidos listos</h2>
   {% if listos %}
   <ul class="listos">
     {% for ln in listos %}
@@ -103,28 +107,37 @@ block clase_main %}control{% endblock %} {% block contenido %}
     {% endfor %}
   </ul>
   {% else %}
-  <p class="vacio">
-    Nada listo por ahora. Cuando cocina marque un pedido como listo aparecerá
-    aquí.
-  </p>
+  <div class="vacio-ilustrado">
+    <svg viewBox="0 0 160 110" aria-hidden="true">
+      <ellipse cx="80" cy="100" rx="56" ry="6" fill="#000" opacity=".3" />
+      <path d="M30 70h100a50 26 0 0 1-100 0z" fill="#2a3550" />
+      <path d="M30 70h100" stroke="#3b4a6b" stroke-width="4" stroke-linecap="round" />
+      <path d="M44 66a36 30 0 0 1 72 0z" fill="#3b4a6b" />
+      <circle cx="80" cy="34" r="5" fill="#ffb020" />
+      <path d="M58 22c0-6 6-6 6-12M80 18c0-6 6-6 6-12M102 22c0-6 6-6 6-12" fill="none"
+        stroke="#ff7a1a" stroke-width="3" stroke-linecap="round" opacity=".7" />
+    </svg>
+    <b>Nada listo por ahora</b>
+    <span>Cuando cocina marque un pedido como listo, aparecerá aquí.</span>
+  </div>
   {% endif %}
 </aside>
 
 <nav class="barra-inferior" aria-label="Acciones">
   {% if current_user.puede('cajero') %}
   <a class="btn" href="{{ url_for('caja.inicio') }}"
-    >Caja{{ ' · turno ' ~ TURNO.numero if TURNO else ' · sin turno' }}</a
+    >{{ icono('caja') }} Caja{{ ' · turno ' ~ TURNO.numero if TURNO else ' · sin turno' }}</a
   >
   {% endif %}
-  <a class="btn" href="{{ url_for('catalogos.notas') }}">Notas fijas</a>
+  <a class="btn" href="{{ url_for('catalogos.notas') }}">{{ icono('nota') }} Notas fijas</a>
   {% if current_user.puede('cajero') %}
-  <a class="btn" href="{{ url_for('catalogos.clientes') }}">Clientes</a>
+  <a class="btn" href="{{ url_for('catalogos.clientes') }}">{{ icono('cliente') }} Clientes</a>
   {% endif %}
-  <a class="btn" href="{{ url_for('cocina.tablero') }}">Cocina</a>
+  <a class="btn" href="{{ url_for('cocina.tablero') }}">{{ icono('cocina') }} Cocina{% if SUSCRIPCION and SUSCRIPCION.plan == 'basico' %}<span class="insignia insignia-pro">Pro</span>{% endif %}</a>
   <form method="post" action="{{ url_for('salon.rapido') }}" class="crece">
     {{ csrf_field() }}
     <button class="btn btn-rayo ancho" type="submit">
-      Pedidos directos · cobro rápido
+      {{ icono('rayo') }} Pedidos directos · cobro rápido
     </button>
   </form>
 </nav>

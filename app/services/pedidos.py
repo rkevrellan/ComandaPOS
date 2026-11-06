@@ -64,6 +64,9 @@ def tomar_idempotencia(clave: str, accion: str) -> bool:
 
 # --------------------------------------------------------------------------- mesas
 def abrir_mesa(mesa: Mesa, mesero: Operador, puestos) -> Comanda:
+    from . import suscripcion
+
+    suscripcion.exigir_operacion("abrir mesas nuevas")
     if mesa.estado != "disponible":
         raise ReglaNegocioError(f"La mesa {mesa.numero} no está disponible.")
     try:
@@ -91,6 +94,9 @@ def abrir_mesa(mesa: Mesa, mesero: Operador, puestos) -> Comanda:
 
 def abrir_rapida(mesero: Operador) -> Comanda:
     """Pedido directo de mostrador (sin mesa): se cobra al momento."""
+    from . import suscripcion
+
+    suscripcion.exigir_operacion("abrir pedidos rápidos nuevos")
     comanda = Comanda(
         numero=secuencias.siguiente("comanda"), tipo="rapido", mesero_id=mesero.id
     )

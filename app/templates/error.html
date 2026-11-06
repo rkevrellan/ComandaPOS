@@ -1,9 +1,16 @@
-{% extends "base.html" %} {% block titulo %}{{ titulo }}{% endblock %} {% block
-contenido %}
+{% extends "base.html" %} {% from "_ilustraciones.html" import escena %} {%
+block titulo %}{{ titulo }}{% endblock %} {% block contenido %} {% set c =
+codigo|int(0) %} {% if c == 404 %}{% set esc = 'perdida' %}{% elif c in (401,
+403) %}{% set esc = 'candado' %}{% elif c == 429 %}{% set esc = 'espera' %}{%
+elif c >= 500 %}{% set esc = 'averia' %}{% else %}{% set esc = 'invalida' %}{%
+endif %}
 <section class="tarjeta tarjeta-error">
+  {{ escena(esc) }}
   <p class="error-codigo">{{ codigo }}</p>
   <h1>{{ titulo }}</h1>
   <p>{{ mensaje }}</p>
-  <a class="btn btn-aceptar" href="{{ url_for('mesas.inicio') }}">Volver</a>
+  <a class="btn btn-aceptar" href="{{ url_for('mesas.inicio') }}"
+    >{{ icono('volver') }} Volver</a
+  >
 </section>
 {% endblock %}

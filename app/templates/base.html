@@ -3,11 +3,19 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#07090f" />
     <title>{% block titulo %}{{ NOMBRE }}{% endblock %} · {{ NOMBRE }}</title>
     <link
       rel="icon"
       href="{{ url_for('static', filename='img/logo.svg') }}"
       type="image/svg+xml"
+    />
+    <link
+      rel="preload"
+      href="{{ url_for('static', filename='fonts/Inter-SemiBold.woff') }}"
+      as="font"
+      type="font/woff"
+      crossorigin
     />
     <link
       rel="stylesheet"
@@ -18,25 +26,34 @@
     class="{% block clase_body %}{% endblock %}"
     data-inactividad="{{ INACTIVIDAD }}"
   >
-    {% if current_user.is_authenticated %}
+    {% if current_user.is_authenticated %} {% set pro = not (SUSCRIPCION and
+    SUSCRIPCION.plan == "basico") %}
     <header class="cabecera">
       <a class="marca" href="{{ url_for('mesas.control') }}">
         <img
           src="{{ url_for('static', filename='img/logo.svg') }}"
           alt=""
-          width="36"
-          height="36"
+          width="38"
+          height="38"
         />
-        <span>{{ NOMBRE }}</span>
+        <span>Comanda<em>POS</em></span>
       </a>
       <div class="cabecera-datos">
         <span class="dato"
-          ><small>Fecha</small><b data-fecha>--/--/----</b></span
+          >{{ icono('calendario') }}<span
+            ><small>Fecha</small><b data-fecha>--/--/----</b></span
+          ></span
         >
-        <span class="dato"><small>Hora</small><b data-hora>--:--</b></span>
         <span class="dato"
-          ><small>Turno #</small
-          ><b>{{ TURNO.numero if TURNO else '—' }}</b></span
+          >{{ icono('reloj') }}<span
+            ><small>Hora</small><b data-hora>--:--</b></span
+          ></span
+        >
+        <span class="dato"
+          >{{ icono('turno') }}<span
+            ><small>Turno</small
+            ><b>{{ '#' ~ TURNO.numero if TURNO else 'Sin abrir' }}</b></span
+          ></span
         >
       </div>
       <div class="cabecera-usuario">
@@ -49,24 +66,34 @@
         >
         <nav class="menu-cabecera" aria-label="Menú">
           {% if current_user.puede('supervisor') %}<a
-            class="btn btn-gris"
+            class="btn btn-gris {{ 'actual' if request.blueprint == 'reportes' else '' }}"
             href="{{ url_for('reportes.inicio') }}"
-            >Reportes</a
+            >{{ icono("reportes") }}<span class="txt">Reportes</span>{% if not pro %}<span
+              class="insignia insignia-pro"
+              >Pro</span
+            >{% endif %}</a
           >{% endif %} {% if current_user.puede('administrador') %}<a
-            class="btn btn-gris"
+            class="btn btn-gris {{ 'actual' if request.blueprint == 'admin' else '' }}"
             href="{{ url_for('admin.inicio') }}"
-            >Administración</a
+            >{{ icono("admin") }}<span class="txt">Administración</span></a
+          >{% endif %} {% if current_user.rol in ('administrador',
+          'programador') %}<a
+            class="btn btn-gris {{ 'actual' if request.blueprint == 'suscripcion' else '' }}"
+            href="{{ url_for('suscripcion.inicio') }}"
+            >{{ icono("corona") }}<span class="txt">Suscripción</span></a
           >{% endif %} {% if current_user.rol == 'programador' %}<a
-            class="btn btn-gris"
+            class="btn btn-gris btn-icono"
             href="{{ url_for('dev.inicio') }}"
-            >Consola</a
+            title="Consola del programador"
+            aria-label="Consola del programador"
+            >{{ icono('consola') }}</a
           >{% endif %}
           <a
-            class="btn btn-gris"
+            class="btn btn-gris btn-icono"
             href="{{ url_for('cuenta.inicio') }}"
             title="Mi cuenta"
             aria-label="Mi cuenta"
-            >⚙</a
+            >{{ icono('ajustes') }}</a
           >
         </nav>
         <form
@@ -75,15 +102,26 @@
           id="form-salir"
         >
           {{ csrf_field() }}
-          <button class="btn btn-salir" type="submit">Salir</button>
+          <button class="btn btn-salir" type="submit">
+            {{ icono('salir') }} Salir
+          </button>
         </form>
       </div>
     </header>
-    {% endif %} {% if DEMO and current_user.is_authenticated %}
-    <div class="banda-demo" role="note">
-      Modo demostración — los documentos no tienen validez fiscal.
+    {% if SUSCRIPCION and SUSCRIPCION.aviso %}
+    <div class="banda banda-{{ SUSCRIPCION.tono }}" role="status">
+      {{ icono('alerta' if SUSCRIPCION.tono != 'info' else 'info') }} {{
+      SUSCRIPCION.aviso }} {% if current_user.rol in ('administrador',
+      'programador') %}<a href="{{ url_for('suscripcion.inicio') }}"
+        >Activar pago</a
+      >{% else %}Avisa a administración.{% endif %}
     </div>
-    {% endif %}
+    {% elif DEMO %}
+    <div class="banda banda-demo" role="note">
+      {{ icono('info') }} Modo demostración — los documentos no tienen validez
+      fiscal.
+    </div>
+    {% endif %} {% endif %}
     <main class="{% block clase_main %}contenido{% endblock %}">
       {% with mensajes = get_flashed_messages(with_categories=true) %} {% if
       mensajes %}

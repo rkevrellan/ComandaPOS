@@ -7,7 +7,7 @@ contenido %}
       >{{ current_user.nombre }} · {{ current_user.nombre_rol }}</small
     >
   </h1>
-  <a class="btn btn-gris" href="{{ url_for('mesas.control') }}">← Mesas</a>
+  <a class="btn btn-gris" href="{{ url_for('mesas.control') }}">{{ icono('volver') }} Mesas</a>
 </div>
 {% if obligatoria and not current_user.tiene_2fa %}
 <p class="aviso aviso-error">
@@ -16,7 +16,7 @@ contenido %}
 {% endif %}
 <div class="tarjetas">
   <section class="tarjeta">
-    <h2>Cambiar {{ 'PIN' if current_user.usa_pin else 'contraseña' }}</h2>
+    <h2>{{ icono('llave') }} Cambiar {{ 'PIN' if current_user.usa_pin else 'contraseña' }}</h2>
     <form
       method="post"
       action="{{ url_for('cuenta.cambiar_clave') }}"
@@ -52,7 +52,7 @@ contenido %}
   </section>
 
   <section class="tarjeta">
-    <h2>Verificación en dos pasos</h2>
+    <h2>{{ icono('escudo') }} Verificación en dos pasos</h2>
     {% if current_user.tiene_2fa %}
     <p class="estado-ok">
       ✔ Activa · {{ restantes }} códigos de recuperación disponibles
@@ -122,7 +122,7 @@ contenido %}
   </section>
 
   <section class="tarjeta">
-    <h2>Sesiones</h2>
+    <h2>{{ icono('usuario') }} Sesiones</h2>
     <p>¿Dejaste la sesión abierta en otra terminal? Ciérrala desde aquí.</p>
     <form method="post" action="{{ url_for('cuenta.salir_de_todo') }}">
       {{ csrf_field() }}<button class="btn" type="submit">

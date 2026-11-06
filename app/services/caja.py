@@ -325,6 +325,12 @@ def cobrar(cuenta: Cuenta, datos, cajero: Operador) -> Documento:
     vuelto = efectivo - falta
 
     if "credito" in pagos:  # RN-10
+        from . import suscripcion
+
+        if not suscripcion.tiene("credito"):
+            raise ReglaNegocioError(
+                "La venta a crédito es del plan Pro. Cobra con otra forma de pago."
+            )
         cliente = cuenta.cliente
         if (
             cliente is None

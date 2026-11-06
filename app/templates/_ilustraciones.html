@@ -1,0 +1,163 @@
+{# Ilustraciones propias de ComandaPOS: la comanda de papel del logo en
+distintas situaciones. SVG en línea, sin estilos en línea (CSP): solo atributos
+de presentación. #} {% macro _comanda(x=70, y=22, giro=0) -%}
+<g transform="translate({{ x }} {{ y }}) rotate({{ giro }} 40 55)">
+  <path
+    d="M4 6h52l18 18v80a6 6 0 0 1-6 6H4a6 6 0 0 1-6-6V12a6 6 0 0 1 6-6z"
+    fill="#7c1d0d"
+    opacity=".25"
+    transform="translate(6 6)"
+  />
+  <path
+    d="M4 0h52l18 18v80a6 6 0 0 1-6 6H4a6 6 0 0 1-6-6V6a6 6 0 0 1 6-6z"
+    fill="#fffaf2"
+  />
+  <path d="M56 0v18h18" fill="#ffd2a8" />
+  <rect x="10" y="26" width="34" height="7" rx="3.5" fill="#9a2a0c" />
+  <rect x="10" y="42" width="46" height="7" rx="3.5" fill="#ffad6b" />
+  <rect x="10" y="58" width="28" height="7" rx="3.5" fill="#ffad6b" />
+  <rect x="10" y="74" width="40" height="7" rx="3.5" fill="#ffad6b" />
+</g>
+{%- endmacro %} {% macro escena(nombre) -%}
+<svg class="ilustracion" viewBox="0 0 240 170" role="img" aria-hidden="true">
+  <defs>
+    <linearGradient id="il-brasa" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffb020" />
+      <stop offset=".5" stop-color="#ff7a1a" />
+      <stop offset="1" stop-color="#ff4d2e" />
+    </linearGradient>
+    <radialGradient id="il-halo" cx=".5" cy=".5" r=".5">
+      <stop offset="0" stop-color="#ff7a1a" stop-opacity=".28" />
+      <stop offset="1" stop-color="#ff7a1a" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+  <circle cx="120" cy="82" r="80" fill="url(#il-halo)" />
+  <ellipse cx="120" cy="156" rx="70" ry="7" fill="#000" opacity=".35" />
+  {% if nombre == 'perdida' %} {{ _comanda(70, 26, -8) }}
+  <circle
+    cx="150"
+    cy="96"
+    r="26"
+    fill="#0b0f18"
+    fill-opacity=".55"
+    stroke="url(#il-brasa)"
+    stroke-width="8"
+  />
+  <path
+    d="M168 116l22 22"
+    stroke="url(#il-brasa)"
+    stroke-width="11"
+    stroke-linecap="round"
+  />
+  <text
+    x="150"
+    y="106"
+    text-anchor="middle"
+    font-size="28"
+    font-weight="900"
+    fill="#fff"
+  >
+    ?
+  </text>
+  {% elif nombre == 'candado' %} {{ _comanda(64, 24, -4) }}
+  <rect x="122" y="84" width="62" height="50" rx="10" fill="url(#il-brasa)" />
+  <path
+    d="M134 84V70a19 19 0 0 1 38 0v14"
+    fill="none"
+    stroke="#ffb020"
+    stroke-width="9"
+    stroke-linecap="round"
+  />
+  <circle cx="153" cy="104" r="7" fill="#3a1608" />
+  <rect x="150" y="106" width="6" height="14" rx="3" fill="#3a1608" />
+  {% elif nombre == 'espera' %} {{ _comanda(58, 26, -6) }}
+  <circle
+    cx="160"
+    cy="98"
+    r="34"
+    fill="#151c2b"
+    stroke="url(#il-brasa)"
+    stroke-width="7"
+  />
+  <path
+    d="M160 76v22l14 9"
+    fill="none"
+    stroke="#ffb020"
+    stroke-width="7"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M120 38c4-6 12-6 16 0M196 50c3-5 10-5 13 0"
+    stroke="#22d3ee"
+    stroke-width="4"
+    stroke-linecap="round"
+    fill="none"
+    opacity=".7"
+  />
+  {% elif nombre == 'averia' %} {{ _comanda(60, 24, 6) }}
+  <path
+    d="M168 46l-22 40h20l-14 40 38-52h-22l16-28z"
+    fill="url(#il-brasa)"
+    stroke="#fff"
+    stroke-opacity=".5"
+    stroke-width="2"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M50 60l-10-4M52 76l-12 2M200 120l12 4M196 136l10 8"
+    stroke="#ffb020"
+    stroke-width="4"
+    stroke-linecap="round"
+  />
+  {% elif nombre == 'invalida' %} {{ _comanda(80, 24, 0) }}
+  <circle
+    cx="160"
+    cy="112"
+    r="24"
+    fill="#e11d48"
+    stroke="#fff"
+    stroke-width="4"
+  />
+  <path
+    d="M150 102l20 20M170 102l-20 20"
+    stroke="#fff"
+    stroke-width="6"
+    stroke-linecap="round"
+  />
+  {% elif nombre == 'cocina-tranquila' %}
+  <path d="M66 96h108a54 30 0 0 1-108 0z" fill="#2a3550" />
+  <path
+    d="M60 96h120"
+    stroke="#3b4a6b"
+    stroke-width="8"
+    stroke-linecap="round"
+  />
+  <rect x="104" y="72" width="32" height="10" rx="5" fill="#3b4a6b" />
+  <path
+    d="M90 60c0-10 10-10 10-20M120 56c0-10 10-10 10-20M150 60c0-10 10-10 10-20"
+    fill="none"
+    stroke="url(#il-brasa)"
+    stroke-width="5"
+    stroke-linecap="round"
+    opacity=".85"
+  />
+  <circle
+    cx="186"
+    cy="56"
+    r="14"
+    fill="#16a34a"
+    stroke="#fff"
+    stroke-width="3"
+  />
+  <path
+    d="M179 56l5 5 9-10"
+    fill="none"
+    stroke="#fff"
+    stroke-width="3.5"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  {% else %} {{ _comanda(80, 26, 0) }} {% endif %}
+</svg>
+{%- endmacro %}

@@ -1,0 +1,111 @@
+{% extends "base.html" %} {% block titulo %}Disponible en Pro{% endblock %} {%
+block clase_main %}pantalla-pro{% endblock %} {% block contenido %}
+<section class="pro-hero" aria-labelledby="titulo-pro">
+  <svg viewBox="0 0 280 240" role="img" aria-label="Corona del plan Pro">
+    <defs>
+      <linearGradient id="pro-a" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#c084fc" />
+        <stop offset="1" stop-color="#22d3ee" />
+      </linearGradient>
+      <linearGradient id="pro-b" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#ffb020" />
+        <stop offset=".5" stop-color="#ff7a1a" />
+        <stop offset="1" stop-color="#ff4d2e" />
+      </linearGradient>
+      <radialGradient id="pro-c" cx=".5" cy=".5" r=".5">
+        <stop offset="0" stop-color="#a855f7" stop-opacity=".45" />
+        <stop offset="1" stop-color="#a855f7" stop-opacity="0" />
+      </radialGradient>
+    </defs>
+    <circle cx="140" cy="118" r="112" fill="url(#pro-c)" />
+    <ellipse cx="140" cy="214" rx="86" ry="9" fill="#000" opacity=".35" />
+    <!-- pantalla del punto de venta -->
+    <rect
+      x="56"
+      y="70"
+      width="168"
+      height="118"
+      rx="16"
+      fill="#151c2b"
+      stroke="#2b3650"
+      stroke-width="2"
+    />
+    <rect x="68" y="84" width="34" height="30" rx="7" fill="#22c55e" />
+    <rect x="108" y="84" width="34" height="30" rx="7" fill="#3b82f6" />
+    <rect x="148" y="84" width="34" height="30" rx="7" fill="#22c55e" />
+    <rect x="188" y="84" width="24" height="30" rx="7" fill="#e11d48" />
+    <rect x="68" y="120" width="34" height="30" rx="7" fill="#a855f7" />
+    <rect x="108" y="120" width="34" height="30" rx="7" fill="#22c55e" />
+    <rect x="148" y="120" width="34" height="30" rx="7" fill="#3b82f6" />
+    <rect x="188" y="120" width="24" height="30" rx="7" fill="#22c55e" />
+    <rect x="68" y="158" width="144" height="18" rx="6" fill="url(#pro-b)" />
+    <rect x="124" y="188" width="32" height="16" fill="#151c2b" />
+    <rect x="104" y="202" width="72" height="8" rx="4" fill="#2b3650" />
+    <!-- corona -->
+    <path
+      d="M96 58l18 14 26-34 26 34 18-14-8 34H104z"
+      fill="url(#pro-a)"
+      stroke="#fff"
+      stroke-opacity=".5"
+      stroke-width="2"
+      stroke-linejoin="round"
+    />
+    <circle cx="140" cy="36" r="6" fill="#fff" />
+    <circle cx="94" cy="56" r="5" fill="#fff" />
+    <circle cx="186" cy="56" r="5" fill="#fff" />
+    <!-- destellos -->
+    <path d="M38 50l4 10 10 4-10 4-4 10-4-10-10-4 10-4z" fill="#ffd166" />
+    <path d="M236 28l3 7 7 3-7 3-3 7-3-7-7-3 7-3z" fill="#67e8f9" />
+    <path
+      d="M246 150l2.5 6 6 2.5-6 2.5-2.5 6-2.5-6-6-2.5 6-2.5z"
+      fill="#c084fc"
+    />
+  </svg>
+  <div>
+    <span class="insignia insignia-pro"
+      >{{ icono('corona') }} {{ NOMBRE }} Pro</span
+    >
+    <h1 id="titulo-pro">{{ datos[0] }} es parte del plan Pro</h1>
+    <p>{{ datos[1] }}</p>
+    {% if funcion == 'red' %}
+    <p>
+      Con el plan {{ planes.basico.nombre }}, {{ NOMBRE }} se usa solo en la PC
+      donde está instalado. Desde esta terminal no se puede entrar.
+    </p>
+    {% elif estado and estado.limitado %}
+    <p>
+      La suscripción está vencida (modo limitado): activa el pago del mes para
+      volver a usar todas las funciones.
+    </p>
+    {% endif %}
+    <div class="fila-botones">
+      {% if current_user.is_authenticated and current_user.rol in
+      ('administrador', 'programador') %}
+      <a
+        class="btn btn-aceptar corto"
+        href="{{ url_for('suscripcion.inicio') }}"
+        >{{ icono('corona') }} Ver planes y activar</a
+      >
+      {% endif %} {% if current_user.is_authenticated %}
+      <a class="btn" href="{{ url_for('mesas.control') }}"
+        >{{ icono('volver') }} Volver a las mesas</a
+      >
+      {% endif %}
+    </div>
+    <p class="ayuda">
+      Plan Pro: B/. {{ planes.pro.precio }} al mes · Básico: B/. {{
+      planes.basico.precio }} al mes.
+    </p>
+  </div>
+</section>
+
+<div class="pro-funciones">
+  {% for clave, (nombre, texto) in funciones_pro.items() %} {% set iconos =
+  {'cocina': 'cocina', 'reportes': 'reportes', 'inventario': 'inventario',
+  'credito': 'credito', 'red': 'red'} %}
+  <div class="mosaico-item {{ 'destacado' if clave == funcion else '' }}">
+    {{ icono(iconos[clave]) }}<b>{{ nombre }}</b><small>{{ texto }}</small>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

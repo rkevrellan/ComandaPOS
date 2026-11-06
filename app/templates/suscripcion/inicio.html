@@ -1,0 +1,241 @@
+{% extends "base.html" %} {% block titulo %}Suscripción{% endblock %} {% block
+contenido %} {% set fases = {'demo': 'Demostración', 'prueba': 'Prueba gratis',
+'activa': 'Al día', 'por_vencer': 'Por vencer', 'gracia': 'En gracia',
+'limitada': 'Modo limitado'} %} {% set plan = planes[estado.plan] %}
+<div class="encabezado-pagina">
+  <h1><span class="sobretitulo-pagina">Tu plan mensual</span>Suscripción</h1>
+  <a class="btn btn-gris" href="{{ url_for('mesas.control') }}"
+    >{{ icono('volver') }} Mesas</a
+  >
+</div>
+
+<section class="susc-hero fase-{{ estado.fase }}" aria-label="Estado del plan">
+  <div>
+    <div class="susc-plan">
+      {{ icono('corona', 'i-xl') }}
+      <h2>{{ NOMBRE }} {{ plan.nombre }}</h2>
+      <span class="susc-estado fase-{{ estado.fase }}"
+        >{{ fases[estado.fase] }}</span
+      >
+    </div>
+    <p class="susc-lema">
+      {% if estado.fase == 'demo' %} Esta es una instalación de demostración:
+      todas las funciones Pro están abiertas y no se cobra. {% elif estado.fase
+      == 'limitada' %} La suscripción venció hace más de {{ gracia }} días. Se
+      pueden terminar, cobrar y facturar las cuentas abiertas y cerrar caja,
+      pero no abrir mesas ni pedidos nuevos hasta activar el pago. {% elif
+      estado.fase == 'gracia' %} El pago está atrasado: todo sigue funcionando
+      hasta el {{ estado.gracia_hasta.strftime('%d/%m/%Y') }}. Después pasa a
+      modo limitado. {% elif estado.fase == 'prueba' %} Estás probando todo {{
+      NOMBRE }} Pro gratis. Al terminar, activa el plan que prefieras. {% else
+      %}{{ plan.lema }}{% endif %}
+    </p>
+    <div class="susc-cifras">
+      <div class="susc-cifra">
+        <small
+          >{{ 'Prueba hasta' if estado.fase == 'prueba' else 'Cubre hasta'
+          }}</small
+        ><b
+          >{{ estado.hasta.strftime('%d/%m/%Y') if estado.hasta else 'Sin
+          límite' }}</b
+        >
+      </div>
+      <div class="susc-cifra">
+        <small
+          >{{ 'Días restantes' if estado.dias >= 0 else 'Días vencida' }}</small
+        ><b>{{ estado.dias|abs if estado.hasta else '∞' }}</b>
+      </div>
+      <div class="susc-cifra">
+        <small>Mensualidad</small><b>B/. {{ plan.precio }}</b>
+      </div>
+    </div>
+  </div>
+  {% set frac = 1 if not estado.hasta else ([[estado.dias, 0]|max, 30]|min) / 30
+  %}
+  <div class="susc-anillo" aria-hidden="true">
+    <svg viewBox="0 0 200 200">
+      <defs>
+        <linearGradient id="anillo" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#ffb020" />
+          <stop offset=".5" stop-color="#ff7a1a" />
+          <stop offset="1" stop-color="#ff4d2e" />
+        </linearGradient>
+      </defs>
+      <circle
+        class="pista"
+        cx="100"
+        cy="100"
+        r="80"
+        fill="none"
+        stroke-width="16"
+      />
+      {% if frac > 0 %}
+      <circle
+        cx="100"
+        cy="100"
+        r="80"
+        fill="none"
+        stroke="url(#anillo)"
+        stroke-width="16"
+        stroke-linecap="round"
+        stroke-dasharray="{{ '%.1f'|format(frac * 502.65) }} 502.65"
+        transform="rotate(-90 100 100)"
+      />
+      {% endif %}
+      <text
+        x="100"
+        y="98"
+        text-anchor="middle"
+        font-size="46"
+        font-weight="900"
+      >
+        {{ estado.dias if estado.hasta and estado.dias >= 0 else ('!' if
+        estado.hasta else '∞') }}
+      </text>
+      <text
+        x="100"
+        y="126"
+        text-anchor="middle"
+        font-size="13"
+        fill="#96a3b8"
+        font-weight="700"
+      >
+        {{ 'DÍAS RESTANTES' if estado.hasta and estado.dias >= 0 else ('VENCIDA'
+        if estado.hasta else 'DEMOSTRACIÓN') }}
+      </text>
+    </svg>
+  </div>
+</section>
+
+<div class="susc-rejilla">
+  <section class="tarjeta" aria-labelledby="titulo-activar">
+    <h2 id="titulo-activar">{{ icono('llave') }} Activar el pago del mes</h2>
+    <ol class="pasos-pago">
+      <li><div>
+        Paga la mensualidad a tu proveedor de {{ NOMBRE }} (Yappy, transferencia
+        ACH o efectivo).
+      </div></li>
+      <li><div>
+        Envíale este ID de instalación junto con el comprobante:
+        <div class="instalacion">
+          {{ icono('servidor') }}<code class="seleccionable" id="id-instalacion"
+            >{{ instalacion }}</code
+          ><button
+            class="btn btn-mini"
+            type="button"
+            data-copiar="#id-instalacion"
+          >
+            {{ icono('copiar') }} Copiar
+          </button>
+        </div>
+      </div></li>
+      <li><div>
+        Pega aquí el código que te devuelve (empieza con <code>CPOS-</code>).
+        <form
+          class="form-codigo"
+          method="post"
+          action="{{ url_for('suscripcion.activar') }}"
+        >
+          {{ csrf_field() }}
+          <label class="ayuda" for="codigo">Código de activación</label>
+          <textarea
+            id="codigo"
+            name="codigo"
+            required
+            maxlength="400"
+            spellcheck="false"
+            autocomplete="off"
+            placeholder="CPOS-XXXXXX-XXXXXX-…"
+          >
+{{ codigo or '' }}</textarea
+          >
+          <button class="btn btn-aceptar separada" type="submit">
+            {{ icono('check') }} Activar código
+          </button>
+        </form>
+      </div></li>
+    </ol>
+  </section>
+
+  <section class="tarjeta historial-pagos" aria-labelledby="titulo-historial">
+    <h2 id="titulo-historial">{{ icono('recibo') }} Pagos activados</h2>
+    {% if historial %}
+    <table class="tabla">
+      <thead>
+        <tr>
+          <th>Activado</th>
+          <th>Plan</th>
+          <th>Cubre hasta</th>
+          <th class="num">Serie</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in historial %}
+        <tr>
+          <td>{{ p.activado | fecha('%d/%m/%Y') }}</td>
+          <td>
+            <span class="insignia insignia-{{ p.plan }}"
+              >{{ planes[p.plan].nombre }}</span
+            >
+          </td>
+          <td>{{ p.hasta.strftime('%d/%m/%Y') }}</td>
+          <td class="num">#{{ p.serie }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="vacio-ilustrado">
+      {{ icono('recibo', 'i-xl') }}
+      <b>Todavía no hay pagos activados</b>
+      <span
+        >Cuando actives tu primer código, cada mes pagado quedará anotado
+        aquí.</span
+      >
+    </div>
+    {% endif %}
+  </section>
+</div>
+
+<h2 class="separada">Planes</h2>
+<div class="planes">
+  <article
+    class="plan {{ 'actual' if estado.plan == 'basico' and estado.fase != 'prueba' else '' }}"
+  >
+    {% if estado.plan == 'basico' and estado.fase != 'prueba' %}<span
+      class="insignia insignia-basico"
+      >Tu plan</span
+    >{% endif %}
+    <h3>{{ icono('caja') }} {{ planes.basico.nombre }}</h3>
+    <p class="plan-precio">
+      B/. {{ planes.basico.precio }} <small>/ mes</small>
+    </p>
+    <p class="plan-lema">{{ planes.basico.lema }}</p>
+    <ul>
+      {% for f in incluye_basico %}
+      <li>{{ icono('check') }}<span>{{ f }}</span></li>
+      {% endfor %}
+    </ul>
+  </article>
+  <article class="plan plan-pro {{ 'actual' if estado.plan == 'pro' else '' }}">
+    <span class="insignia insignia-pro"
+      >{{ 'Tu plan' if estado.plan == 'pro' else 'Recomendado' }}</span
+    >
+    <h3>{{ icono('corona') }} {{ planes.pro.nombre }}</h3>
+    <p class="plan-precio">B/. {{ planes.pro.precio }} <small>/ mes</small></p>
+    <p class="plan-lema">{{ planes.pro.lema }}</p>
+    <ul>
+      <li>
+        {{ icono('check') }}<span
+          >Todo lo del plan {{ planes.basico.nombre }}</span
+        >
+      </li>
+      {% for clave, (nombre, texto) in funciones_pro.items() %}
+      <li>
+        {{ icono('check') }}<span>{{ nombre }}<small>{{ texto }}</small></span>
+      </li>
+      {% endfor %}
+    </ul>
+  </article>
+</div>
+{% endblock %}

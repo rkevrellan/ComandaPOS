@@ -34,6 +34,8 @@ echo [5/7] Analisis estatico de seguridad (bandit, severidad media o alta)
 "%VPY%" -m bandit -q -r app run.py escritorio.py seed.py -ll -c bandit.yaml || goto error
 
 echo [6/7] Empaquetado (PyInstaller)
+rem La llave de suscripcion debe ser la del proveedor (proveedor\emitir_codigo.py crear-llave).
+"%VPY%" run.py --verificar-llave || goto error
 if exist "build" rmdir /s /q "build"
 if exist "dist" rmdir /s /q "dist"
 "%VPY%" -m PyInstaller --noconfirm --clean comandapos.spec || goto error

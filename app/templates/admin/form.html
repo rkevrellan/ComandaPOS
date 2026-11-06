@@ -5,7 +5,7 @@ endblock %} {% block contenido %}
   <a
     class="btn btn-gris"
     href="{{ url_for('admin.catalogo', clave=cat.clave) }}"
-    >← {{ cat.titulo }}</a
+    >{{ icono('volver') }} {{ cat.titulo }}</a
   >
 </div>
 <section class="tarjeta">

@@ -9,7 +9,7 @@ hasta.isoformat()} %}
       hasta != desde else '' }}</small
     >
   </h1>
-  <a class="btn btn-gris" href="{{ url_for('mesas.control') }}">← Mesas</a>
+  <a class="btn btn-gris" href="{{ url_for('mesas.control') }}">{{ icono('volver') }} Mesas</a>
 </div>
 <form method="get" class="fila-botones">
   <label
@@ -45,7 +45,7 @@ hasta.isoformat()} %}
 
 <div class="tarjetas">
   <section class="tarjeta tarjeta-ancha">
-    <h2>Ventas por día y hora <small class="suave">(mapa de calor)</small></h2>
+    <h2>{{ icono('calendario') }} Ventas por día y hora <small class="suave">(mapa de calor)</small></h2>
     {% if r.documentos %}
     <table class="calor">
       <thead>
@@ -77,7 +77,7 @@ hasta.isoformat()} %}
 
   <section class="tarjeta">
     <h2>
-      Por forma de pago
+      {{ icono('reportes') }} Por forma de pago
       <a
         class="enlace csv"
         href="{{ url_for('reportes.csv', nombre='formas', **qs) }}"
@@ -101,7 +101,7 @@ hasta.isoformat()} %}
 
   <section class="tarjeta">
     <h2>
-      Por mesero
+      {{ icono('reportes') }} Por mesero
       <a
         class="enlace csv"
         href="{{ url_for('reportes.csv', nombre='meseros', **qs) }}"
@@ -125,7 +125,7 @@ hasta.isoformat()} %}
 
   <section class="tarjeta">
     <h2>
-      Por sección
+      {{ icono('reportes') }} Por sección
       <a
         class="enlace csv"
         href="{{ url_for('reportes.csv', nombre='secciones', **qs) }}"
@@ -149,7 +149,7 @@ hasta.isoformat()} %}
 
   <section class="tarjeta">
     <h2>
-      Productos más vendidos
+      {{ icono('reportes') }} Productos más vendidos
       <a
         class="enlace csv"
         href="{{ url_for('reportes.csv', nombre='productos', **qs) }}"
@@ -182,7 +182,7 @@ hasta.isoformat()} %}
 
   <section class="tarjeta">
     <h2>
-      ITBMS por tasa
+      {{ icono('reportes') }} ITBMS por tasa
       <a
         class="enlace csv"
         href="{{ url_for('reportes.csv', nombre='itbms', **qs) }}"
@@ -218,7 +218,7 @@ hasta.isoformat()} %}
 
   <section class="tarjeta">
     <h2>
-      Por día
+      {{ icono('reportes') }} Por día
       <a
         class="enlace csv"
         href="{{ url_for('reportes.csv', nombre='dias', **qs) }}"
@@ -250,7 +250,7 @@ hasta.isoformat()} %}
   </section>
 
   <section class="tarjeta">
-    <h2>Tiempos de cocina</h2>
+    <h2>{{ icono('reloj') }} Tiempos de cocina</h2>
     <table class="tabla">
       <thead>
         <tr>
@@ -279,7 +279,7 @@ hasta.isoformat()} %}
 
   <section class="tarjeta tarjeta-ancha">
     <h2>
-      Descuentos a jubilados · B/. {{ r.jubilados_total | dinero }}
+      {{ icono('reportes') }} Descuentos a jubilados · B/. {{ r.jubilados_total | dinero }}
       <a
         class="enlace csv"
         href="{{ url_for('reportes.csv', nombre='jubilados', **qs) }}"
@@ -318,7 +318,7 @@ hasta.isoformat()} %}
 
   <section class="tarjeta tarjeta-ancha">
     <h2>
-      Anulaciones
+      {{ icono('reportes') }} Anulaciones
       <a
         class="enlace csv"
         href="{{ url_for('reportes.csv', nombre='anulaciones', **qs) }}"
@@ -359,7 +359,7 @@ hasta.isoformat()} %}
 
   {% if r.notas %}
   <section class="tarjeta tarjeta-ancha">
-    <h2>Notas de crédito</h2>
+    <h2>{{ icono('recibo') }} Notas de crédito</h2>
     <table class="tabla">
       <thead>
         <tr>

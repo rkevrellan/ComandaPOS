@@ -13,13 +13,13 @@ contenido %}
     <a class="btn btn-gris" href="{{ url_for('catalogos.clientes') }}"
       >Clientes y abonos</a
     >
-    <a class="btn btn-gris" href="{{ url_for('mesas.control') }}">← Mesas</a>
+    <a class="btn btn-gris" href="{{ url_for('mesas.control') }}">{{ icono('volver') }} Mesas</a>
   </div>
 </div>
 
 <div class="tarjetas">
   <section class="tarjeta {{ 'tarjeta-alerta' if avisos_fiscales else '' }}">
-    <h2>Facturación electrónica</h2>
+    <h2>{{ icono('documento') }} Facturación electrónica</h2>
     <dl class="pares">
       <dt>Folios disponibles</dt>
       <dd>
@@ -67,7 +67,7 @@ contenido %}
   </section>
 
   <section class="tarjeta">
-    <h2>Impresión</h2>
+    <h2>{{ icono('imprimir') }} Impresión</h2>
     <p>
       Impresora de caja:
       <b>{{ impresora_caja.nombre if impresora_caja else 'no configurada' }}</b>
@@ -93,7 +93,7 @@ contenido %}
 
   {% if turno %}
   <section class="tarjeta">
-    <h2>Gaveta sin venta</h2>
+    <h2>{{ icono('gaveta') }} Gaveta sin venta</h2>
     <form
       method="post"
       action="{{ url_for('caja.gaveta') }}"
@@ -117,7 +117,7 @@ contenido %}
 
 {% if not turno %}
 <section class="tarjeta tarjeta-centro separada">
-  <h2>Abrir turno</h2>
+  <h2>{{ icono('turno') }} Abrir turno</h2>
   <p>
     Cuenta el fondo de la gaveta y escríbelo. Sin turno abierto no se puede
     cobrar.
@@ -137,7 +137,7 @@ contenido %}
 {% else %}
 <div class="tarjetas separada">
   <section class="tarjeta">
-    <h2>Turno {{ turno.numero }}</h2>
+    <h2>{{ icono('turno') }} Turno {{ turno.numero }}</h2>
     <dl class="pares">
       <dt>Cajero</dt>
       <dd>{{ turno.cajero.nombre }}</dd>
@@ -156,7 +156,7 @@ contenido %}
     </dl>
   </section>
   <section class="tarjeta">
-    <h2>Ventas por forma de pago</h2>
+    <h2>{{ icono('billete') }} Ventas por forma de pago</h2>
     <dl class="pares">
       {% for clave, nombre in formas.items() %}
       <dt>{{ nombre }}</dt>
@@ -175,7 +175,7 @@ contenido %}
     </dl>
   </section>
   <section class="tarjeta">
-    <h2>Corte Z · cerrar turno</h2>
+    <h2>{{ icono('candado') }} Corte Z · cerrar turno</h2>
     <p>
       Efectivo esperado en gaveta:
       <b>B/. {{ datos.efectivo_esperado | dinero }}</b>
@@ -213,7 +213,7 @@ contenido %}
     </form>
   </section>
   <section class="tarjeta tarjeta-ancha">
-    <h2>Comprobantes del turno</h2>
+    <h2>{{ icono('recibo') }} Comprobantes del turno</h2>
     <table class="tabla">
       <thead>
         <tr>
@@ -285,7 +285,7 @@ contenido %}
 </div>
 {% endif %} {% if anteriores %}
 <section class="tarjeta tarjeta-ancha separada">
-  <h2>Turnos anteriores</h2>
+  <h2>{{ icono('calendario') }} Turnos anteriores</h2>
   <table class="tabla">
     <thead>
       <tr>

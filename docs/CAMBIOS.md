@@ -1,3 +1,53 @@
+# Cambios de la versión 1.2.0 — suscripción mensual y diseño «Brasa»
+
+## Suscripción mensual (SaaS)
+
+ComandaPOS pasa a cobrarse por mes con dos planes. Todo lo de la suscripción se configura y se
+explica en [SUSCRIPCION.md](SUSCRIPCION.md).
+
+| Plan | Qué incluye |
+|---|---|
+| **Básico** (B/. 29.00/mes, precio de ejemplo) | El punto de venta: mapa de mesas, comandas, servicio rápido, cobro, factura electrónica DGI, notas de crédito, caja (X/Z), jubilado, catálogos, operadores, 2FA y auditoría. Solo en la PC donde está instalado. |
+| **Pro** (B/. 59.00/mes, precio de ejemplo) | Todo lo anterior + pantalla de cocina, reportes avanzados, inventario y recetas, crédito a clientes y terminales en red. |
+
+- **Códigos mensuales firmados (Ed25519).** El restaurante paga, envía su ID de instalación y pega
+  el código `CPOS-…` en Administración → Suscripción. ComandaPOS solo tiene la llave pública: no se
+  puede falsificar un código, usarlo en otra PC ni activarlo dos veces.
+- **Fases:** prueba de 14 días (Pro) → al día → por vencer (aviso 5 días antes) → gracia (7 días)
+  → **modo limitado**: se terminan, cobran y facturan las cuentas abiertas y se cierra caja, pero no
+  se abren mesas ni pedidos nuevos. Retroceder el reloj de Windows no alarga nada.
+- **Herramienta del proveedor:** `proveedor/emitir_codigo.py` (crear-llave, emitir, historial).
+- `build.bat` se niega a empaquetar con la llave de pruebas (`run.py --verificar-llave`).
+- En la demostración no se cobra: todo funciona como Pro.
+
+## Diseño «Brasa»
+
+- Hoja de estilos nueva: fondo carbón con brillos cálidos, paneles de vidrio, degradados
+  ámbar → brasa → rojo, sombras con profundidad y estados con brillo propio.
+- Tipografía **Inter / Inter Display** incluida en el programa (SIL OFL, funciona sin internet).
+- **59 íconos propios** (`static/img/iconos.svg`) en cabecera, menús, botones y tarjetas.
+- Logo renovado e ícono `.ico` del instalador regenerado.
+- Acceso con panel de presentación; mesas con degradado, brillo y pre-cuenta que late; productos
+  del color de su sección; la comanda y la cocina como «papel» legible; cobro con ícono por forma de
+  pago; administración en mosaico con íconos y candado en lo que es Pro.
+- Ilustraciones propias para errores (404, 403, 429, 5xx, 400) y estados vacíos.
+
+## Servidor apagado
+
+- **Causa del problema reportado:** ComandaPOS y otra app de prueba usaban `127.0.0.1:5000`; el
+  navegador guardó el «modo sin conexión» de la otra app y lo mostraba cuando ComandaPOS se apagaba.
+- ComandaPOS registra su propio service worker en `/sw.js`: reemplaza al ajeno, borra sus cachés y,
+  si el servidor no responde, muestra «El servidor de ComandaPOS no responde», que vuelve sola.
+  Si se había enviado un formulario, avisa que la acción pudo no guardarse.
+- Barra roja de «Sin conexión con el servidor» mientras se trabaja; la pantalla de cocina no recarga
+  a ciegas y el bloqueo por inactividad no lleva a una pantalla de error.
+
+## Pruebas
+
+`tests/test_suscripcion.py` (19) y `tests/test_sin_servidor.py` (7). Total: 250, todas pasan.
+
+---
+
 # Cambios de la versión 1.1.0 — correcciones del diagnóstico
 
 La 1.1.0 corrige los 24 hallazgos del «Diagnóstico — ComandaPOS 1.0» (H-01 a H-24). Cada corrección

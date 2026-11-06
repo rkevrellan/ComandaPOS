@@ -1,7 +1,7 @@
-{% extends "base.html" %} {% block titulo %}Cocina{% endblock %} {% block
+{% extends "base.html" %} {% from "_ilustraciones.html" import escena %} {% block titulo %}Cocina{% endblock %} {% block
 clase_main %}pantalla-cocina{% endblock %} {% block contenido %}
 <div class="cocina-barra" data-autorecarga="{{ recarga }}">
-  <h1>Pantalla de {{ area.descripcion if area else 'cocina' }}</h1>
+  <h1>{{ icono('fuego') }} Pantalla de {{ area.descripcion if area else 'cocina' }}</h1>
   <nav class="fila-botones">
     {% for a in areas %}
     <a
@@ -13,9 +13,9 @@ clase_main %}pantalla-cocina{% endblock %} {% block contenido %}
     <a
       class="btn btn-gris"
       href="{{ url_for('cocina.tablero', area=area.id if area else None) }}"
-      >Refrescar</a
+      >{{ icono('refrescar') }} Refrescar</a
     >
-    <a class="btn btn-gris" href="{{ url_for('mesas.control') }}">← Mesas</a>
+    <a class="btn btn-gris" href="{{ url_for('mesas.control') }}">{{ icono('volver') }} Mesas</a>
   </nav>
 </div>
 <p class="leyenda-kds">
@@ -72,9 +72,11 @@ clase_main %}pantalla-cocina{% endblock %} {% block contenido %}
     </footer>
   </article>
   {% else %}
-  <p class="vacio grande">
-    Sin pedidos pendientes en {{ area.descripcion if area else 'esta área' }}.
-  </p>
+  <div class="vacio-ilustrado vacio-cocina">
+    {{ escena('cocina-tranquila') }}
+    <b>Sin pedidos pendientes en {{ area.descripcion if area else 'esta área' }}</b>
+    <span>Las comandas nuevas aparecen aquí solas.</span>
+  </div>
   {% endfor %}
 </div>
 {% endblock %}
